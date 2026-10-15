@@ -339,7 +339,7 @@ module.exports = {
     }
   },
   // updates content.json file with data from content type editor form
-  saveContent: (request, response, next) => {
+  saveContent: async (request, response, next) => {
     try {
       const input = JSON.parse(request.body.parameters);
       const currentParams = fs.readFileSync(`content/${request.params.folder}/content.json`, 'utf-8');
@@ -355,6 +355,21 @@ module.exports = {
         delete info.changes;
       }
       fs.writeFileSync(infoFile, JSON.stringify(info));
+      try {
+        await logic.generateInfo(request.params.folder, request.params.library);
+        info = JSON.parse(fs.readFileSync(infoFile, 'utf-8'));
+        info = {...info, ...input.metadata};
+        if (info.authors && !info.authors.length) {
+          delete info.authors;
+        }
+        if (info.changes && !info.changes.length) {
+          delete info.changes;
+        }
+        fs.writeFileSync(infoFile, JSON.stringify(info));
+      }
+      catch (depsError) {
+        console.error('> failed to refresh player dependencies', depsError.message || depsError);
+      }
       const contentFiles = parseContentFiles([input.params]);
       const list = [];
       for (let item in contentFiles) {
@@ -533,7 +548,11 @@ module.exports = {
         return;
       }
       await logic.upgrade(folder, library);
-      const libs = await logic.computeDependencies(library, 'view', null, libraryDirs[registry.regular[library].id]);
+      const libs = await logic.computePlayerDependencies(
+        library,
+        folder,
+        libraryDirs[registry.regular[library].id]
+      );
       const jsonContent = fs.readFileSync(`./content/${folder}/content.json`, 'utf8');
       const sessions = manageSession(request.params.folder, {
         language: request.query?.language,
