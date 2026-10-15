@@ -130,24 +130,15 @@ module.exports = {
     fs.rmSync(target, { recursive: true, force: true });
     return folder;
   },
-  // creates zip archive export file in the .h5p format
+  // creates a thin .h5p archive: h5p.json at the root and content/ beside it, no libraries
   export: async (library, folder) => {
-    const registry = await module.exports.getRegistry();
-    const libraryDirs = await module.exports.parseLibraryFolders();
-    const libFolder = libraryDirs[registry.regular[library].id];
+    await module.exports.generateInfo(folder, library);
     const target = `${config.folders.temp}/${folder}`;
     fs.rmSync(target, { recursive: true, force: true });
     fs.mkdirSync(target);
     fs.cpSync(`content/${folder}`, `${target}/content`, { recursive: true });
     fs.renameSync(`${target}/content/h5p.json`, `${target}/h5p.json`);
     fs.rmSync(`${target}/content/sessions`, { recursive: true, force: true });
-    let libs = await module.exports.computeDependencies(library, 'view', null, libFolder);
-    const editLibs = await module.exports.computeDependencies(library, 'edit', null, libFolder);
-    libs = {...libs, ...editLibs};
-    for (let item in libs) {
-      const folder = libraryDirs[libs[item].id];
-      fs.cpSync(`${config.folders.libraries}/${folder}`, `${target}/${folder}`, { recursive: true });
-    }
     const files = getFileList(target);
     const zip = new admZip();
     for (let item of files) {
