@@ -330,9 +330,6 @@ module.exports = {
       }
       done[level][dep].requiredBy.push(requiredByPath);
       done[level][dep].level = level;
-      // Fetch semantics from the same ref we used for library.json. Rewriting a branch
-      // name to major.minor.patch breaks when that patch is unreleased (no such tag).
-      const optionals = await getOptionals(dep, org, repoName, version, toDo[dep].folder);
       if (list.preloadedDependencies) {
         for (let item of list.preloadedDependencies) {
           let ver = version == 'master' ? version : `${item.majorVersion}.${item.minorVersion}`;
@@ -340,10 +337,17 @@ module.exports = {
           handleDepListEntry(item.machineName, dep, ver, dir);
         }
       }
-      for (let item in optionals) {
-        let ver = version == 'master' ? version : optionals[item].version;
-        const dir = folder ? libraryDirs[item] : null;
-        handleDepListEntry(item, dep, ver, dir);
+      // Semantics "options" only in edit. In view they pull every embeddable library
+      // at its newest tag instead of the library actually used in content.json.
+      // Fetch semantics from the same ref as library.json. Rewriting a branch name to
+      // major.minor.patch breaks when that patch is unreleased (no such tag).
+      if (mode == 'edit') {
+        const optionals = await getOptionals(dep, org, repoName, version, toDo[dep].folder);
+        for (let item in optionals) {
+          let ver = version == 'master' ? version : optionals[item].version;
+          const dir = folder ? libraryDirs[item] : null;
+          handleDepListEntry(item, dep, ver, dir);
+        }
       }
       if (mode == 'edit' && list.editorDependencies) {
         for (let item of list.editorDependencies) {
@@ -551,12 +555,13 @@ module.exports = {
     const libraryDirs = await module.exports.parseLibraryFolders();
     const libFolder = libraryDirs[registry.regular[library].id];
     const target = `content/${folder}`;
-    let libs = await module.exports.computeDependencies(library, 'view', null, libFolder);
-    const editLibs = await module.exports.computeDependencies(library, 'edit', null, libFolder);
-    libs = {...libs, ...editLibs};
+    const libs = await module.exports.computePlayerDependencies(library, folder, libFolder);
     const map = {};
     const preloadedDependencies = [];
     for (let item in libs) {
+      if (!libs[item].id) {
+        continue;
+      }
       for (let predep of (libs[item].preloadedDependencies || [])) {
         if (map[predep.machineName]) {
           continue;
@@ -564,13 +569,23 @@ module.exports = {
         map[predep.machineName] = true;
         preloadedDependencies.push(predep);
       }
+      // Include the embedded library itself, not only its preloaded dependencies.
+      if (item !== library && !map[libs[item].id]) {
+        map[libs[item].id] = true;
+        preloadedDependencies.push({
+          machineName: libs[item].id,
+          majorVersion: libs[item].version.major,
+          minorVersion: libs[item].version.minor
+        });
+      }
     }
     preloadedDependencies.push({
       machineName: libs[library].id,
       minorVersion: libs[library].version.minor,
       majorVersion: libs[library].version.major,
     });
-    const info = {
+    const infoPath = `${target}/h5p.json`;
+    let info = {
       title: folder,
       language: 'en',
       mainLibrary: libs[library].id,
@@ -579,7 +594,62 @@ module.exports = {
       embedTypes: ['div'],
       preloadedDependencies
     };
-    fs.writeFileSync(`${target}/h5p.json`, JSON.stringify(info));
+    if (fs.existsSync(infoPath)) {
+      try {
+        const previous = JSON.parse(fs.readFileSync(infoPath, 'utf-8'));
+        info = {
+          ...previous,
+          mainLibrary: libs[library].id,
+          preloadedDependencies
+        };
+      }
+      catch (e) {
+        // ignore a corrupt previous file
+      }
+    }
+    fs.writeFileSync(infoPath, JSON.stringify(info));
+  },
+  /**
+   * Player dependencies for a content folder: main library (view) plus every
+   * library referenced in content.json. Semantics optionals and editor deps stay out.
+   */
+  computePlayerDependencies: async (library, contentFolder, libFolder) => {
+    const registry = await module.exports.getRegistry();
+    const libraryDirs = await module.exports.parseLibraryFolders();
+    let libs = await module.exports.computeDependencies(library, 'view', null, libFolder);
+    const contentFile = `content/${contentFolder}/content.json`;
+    if (!fs.existsSync(contentFile)) {
+      return libs;
+    }
+    let params;
+    try {
+      params = JSON.parse(fs.readFileSync(contentFile, 'utf-8'));
+    }
+    catch (e) {
+      return libs;
+    }
+    const used = collectLibrariesFromContent(params).filter((machineName) => {
+      return !!libraryDirs[machineName];
+    });
+    for (let machineName of used) {
+      const entry = registry.reversed[machineName];
+      const shortName = entry?.shortName;
+      if (!shortName || !registry.regular[shortName]) {
+        module.exports.write(`\n!!! unregistered library ${machineName} used in content `);
+        continue;
+      }
+      if (libs[shortName]?.id) {
+        continue;
+      }
+      const more = await module.exports.computeDependencies(
+        shortName,
+        'view',
+        null,
+        libraryDirs[machineName]
+      );
+      libs = { ...libs, ...more };
+    }
+    return libs;
   },
   // upgrades content via current main library upgrades.js scripts
   upgrade: async (folder, library) => {
@@ -713,6 +783,43 @@ module.exports = {
   getFile,
   getFileList
 }
+// Walk content params and collect embedded library machine names ("H5P.X major.minor").
+const collectLibrariesFromContent = (entries) => {
+  const found = {};
+  const libraryPattern = /^(H5P(?:Editor)?\.[A-Za-z0-9]+) (\d+)\.(\d+)/;
+  let list = Array.isArray(entries) ? entries.slice() : [entries];
+  while (list.length) {
+    const toDo = [];
+    for (let obj of list) {
+      if (!obj || typeof obj !== 'object') {
+        continue;
+      }
+      if (typeof obj.library === 'string') {
+        const match = obj.library.match(libraryPattern);
+        if (match) {
+          found[match[1]] = true;
+        }
+      }
+      if (Array.isArray(obj)) {
+        for (let item of obj) {
+          if (item && typeof item === 'object') {
+            toDo.push(item);
+          }
+        }
+        continue;
+      }
+      for (let attr in obj) {
+        const value = obj[attr];
+        if (value && typeof value === 'object') {
+          toDo.push(value);
+        }
+      }
+    }
+    list = toDo;
+  }
+  return Object.keys(found);
+};
+module.exports.collectLibrariesFromContent = collectLibrariesFromContent;
 // determines if provided path has duplicate entries; entries are separated by '/';
 const pathHasDuplicates = (path) => {
   const ledger = {};
