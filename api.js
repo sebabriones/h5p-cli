@@ -101,11 +101,6 @@ module.exports = {
         response.end(JSON.stringify({success: true}));
         return;
       }
-      const dataFile = `content/${request.params.folder}/sessions/${session.name}.json`;
-      const data = getSession(request.params.folder);
-      data.resume[request.params.id] = data.resume[request.params.id] || {};
-      data.resume[request.params.id][request.params.type] = request.body.data;
-      fs.writeFileSync(dataFile, JSON.stringify(data));
       response.set('Content-Type', 'application/json');
       response.end(JSON.stringify({success: true}));
     }
@@ -148,7 +143,7 @@ module.exports = {
   // import zipped archive of content type
   import: (request, response, next) => {
     try {
-      request.params.folder = request.params.folder.replaceAll(/[^a-zA-Z0-9 -]/g, '');
+      request.params.folder = request.params.folder.replaceAll(/[^a-zA-Z0-9 _-]/g, '');
       request.params.folder = request.params.folder.replaceAll(' ', '-');
       const path = logic.import(request.params.folder, request.file.path);
       fs.rmSync(request.file.path);
@@ -172,7 +167,7 @@ module.exports = {
   // create empty content type
   create: async (request, response, next) => {
     try {
-      request.params.folder = request.params.folder.replaceAll(/[^a-zA-Z0-9 -]/g, '');
+      request.params.folder = request.params.folder.replaceAll(/[^a-zA-Z0-9 _-]/g, '');
       request.params.folder = request.params.folder.replaceAll(' ', '-');
       const target = `content/${request.params.folder}`;
       if (fs.existsSync(target)) {
@@ -182,9 +177,9 @@ module.exports = {
         }));
         return;
       }
-      fs.mkdirSync(target);
+      fs.mkdirSync(`${target}/content`, { recursive: true });
       logic.generateInfo(request.params.folder, request.params.type);
-      fs.writeFileSync(`${target}/content.json`, JSON.stringify({}));
+      fs.writeFileSync(`${target}/content/content.json`, JSON.stringify({}));
       response.set('Content-Type', 'application/json');
       response.end(JSON.stringify({
         result: request.params.folder
@@ -302,7 +297,7 @@ module.exports = {
   uploadFile: (request, response, next) => {
     try {
       const form = JSON.parse(request.body.field);
-      const targetFolder = `content/${request.params.folder}/${form.type}s`;
+      const targetFolder = `${logic.contentRoot(request.params.folder)}/${form.type}s`;
       if (!fs.existsSync(targetFolder)) {
         fs.mkdirSync(targetFolder);
       }
@@ -342,9 +337,10 @@ module.exports = {
   saveContent: async (request, response, next) => {
     try {
       const input = JSON.parse(request.body.parameters);
-      const currentParams = fs.readFileSync(`content/${request.params.folder}/content.json`, 'utf-8');
+      const contentFile = logic.contentJsonPath(request.params.folder);
+      const currentParams = fs.readFileSync(contentFile, 'utf-8');
       const newParams = JSON.stringify(input.params);
-      fs.writeFileSync(`content/${request.params.folder}/content.json`, newParams);
+      fs.writeFileSync(contentFile, newParams);
       const infoFile = `content/${request.params.folder}/h5p.json`;
       let info = JSON.parse(fs.readFileSync(infoFile, 'utf-8'));
       info = {...info, ...input.metadata};
@@ -377,7 +373,7 @@ module.exports = {
         list.push(parts[parts.length - 1]);
       }
       for (let type of config.mediaTypes) {// delete unused media files
-        const targetFolder = `content/${request.params.folder}/${type}`;
+        const targetFolder = `${logic.contentRoot(request.params.folder)}/${type}`;
         if (!fs.existsSync(targetFolder)) {
           continue;
         }
@@ -453,7 +449,7 @@ module.exports = {
       const metadataSemantics = fs.readFileSync(`${require.main.path}/${config.folders.assets}/metadataSemantics.json`, 'utf-8');
       const copyrightSemantics = fs.readFileSync(`${require.main.path}/${config.folders.assets}/copyrightSemantics.json`, 'utf-8');
       const libs = await logic.computeDependencies(library, 'edit', null, libraryDirs[registry.regular[library].id]);
-      const jsonContent = fs.readFileSync(`./content/${folder}/content.json`, 'utf8');
+      const jsonContent = fs.readFileSync(logic.contentJsonPath(folder), 'utf8');
       let preloadedJs = [];
       let preloadedCss = [];
       for (let item in libs) {
@@ -510,6 +506,7 @@ module.exports = {
         title: info.title,
         baseUrl,
         ajaxPath: `${baseUrl}/edit/${library}/${folder}/`,
+        filesPath: `${baseUrl}/${logic.contentRoot(folder)}`,
         copyrightSemantics,
         metadataSemantics,
         library,
@@ -553,7 +550,7 @@ module.exports = {
         folder,
         libraryDirs[registry.regular[library].id]
       );
-      const jsonContent = fs.readFileSync(`./content/${folder}/content.json`, 'utf8');
+      const jsonContent = fs.readFileSync(logic.contentJsonPath(folder), 'utf8');
       const sessions = manageSession(request.params.folder, {
         language: request.query?.language,
         name: request.query?.session
@@ -605,6 +602,7 @@ module.exports = {
         libraries: config.folders.libraries,
         title: JSON.stringify(info.title),
         baseUrl,
+        contentBase: `${baseUrl}/${logic.contentRoot(folder)}`,
         library,
         folder,
         session: session.name,
@@ -887,29 +885,10 @@ const manageSession = (folder, options, getSessions) => {
       session[key] = options[key];
     }
   }
-  const sessionFolder = `content/${folder}/sessions`;
-  const sessionFile = `${sessionFolder}/${session.name}.json`;
-  if (folder && !fs.existsSync(sessionFolder)) {
-    fs.mkdirSync(sessionFolder);
-  }
-  if (folder && session.name != 'null' && !fs.existsSync(sessionFile)) {
-    fs.writeFileSync(sessionFile, JSON.stringify({
-      resume: []
-    }));
-  }
-  if (folder && getSessions) {
-    const files = fs.readdirSync(sessionFolder);
-    return files;
-  }
   return [];
 }
 const getSession = (folder) => {
-  const dataFile = `content/${folder}/sessions/${session.name}.json`;
-  let userData = {};
-  if (fs.existsSync(dataFile)) {
-    userData = JSON.parse(fs.readFileSync(dataFile, 'utf-8'));
-  }
-  return userData;
+  return { resume: [] };
 }
 const getLangLabels = async () => {
   let langFile = `${require.main.path}/${config.folders.assets}/languages/${session.language}.json`;
@@ -923,16 +902,5 @@ const getLangLabels = async () => {
  * @param {string} folder Folder name (contentId) if content to reset user data for.
  */
 const resetContentUserData = (folder) => {
-  const sessionsDir = `content/${folder}/sessions`;
-  fs.readdirSync(sessionsDir).forEach((file) => {
-    if (path.extname(file) !== '.json') {
-      return;
-    }
-    const dataFile = path.join(sessionsDir, file);
-    const data = JSON.parse(fs.readFileSync(dataFile, 'utf8'));
-    data.resume.forEach(entry => {
-      entry.state = null; // Means to reset state for H5P core
-    });
-    fs.writeFileSync(dataFile, JSON.stringify(data, null, 2));
-  });
+  return;
 };

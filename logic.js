@@ -124,21 +124,36 @@ module.exports = {
   // imports content type from zip archive file in the .h5p format
   import: (folder, archive) => {
     const target = `${config.folders.temp}/${folder}`;
+    const dest = `content/${folder}`;
     new admZip(archive).extractAllTo(target);
-    fs.renameSync(`${target}/content`, `content/${folder}`);
-    fs.renameSync(`${target}/h5p.json`, `content/${folder}/h5p.json`);
+    fs.rmSync(dest, { recursive: true, force: true });
+    fs.mkdirSync(dest, { recursive: true });
+    if (fs.existsSync(`${target}/h5p.json`)) {
+      fs.renameSync(`${target}/h5p.json`, `${dest}/h5p.json`);
+    }
+    if (fs.existsSync(`${target}/content`)) {
+      fs.renameSync(`${target}/content`, `${dest}/content`);
+    }
     fs.rmSync(target, { recursive: true, force: true });
     return folder;
   },
   // creates a thin .h5p archive: h5p.json at the root and content/ beside it, no libraries
   export: async (library, folder) => {
     await module.exports.generateInfo(folder, library);
+    const source = `content/${folder}`;
     const target = `${config.folders.temp}/${folder}`;
     fs.rmSync(target, { recursive: true, force: true });
     fs.mkdirSync(target);
-    fs.cpSync(`content/${folder}`, `${target}/content`, { recursive: true });
-    fs.renameSync(`${target}/content/h5p.json`, `${target}/h5p.json`);
-    fs.rmSync(`${target}/content/sessions`, { recursive: true, force: true });
+    const nested = `${source}/content/content.json`;
+    if (fs.existsSync(nested)) {
+      fs.copyFileSync(`${source}/h5p.json`, `${target}/h5p.json`);
+      fs.cpSync(`${source}/content`, `${target}/content`, { recursive: true });
+    }
+    else {
+      fs.cpSync(source, `${target}/content`, { recursive: true });
+      fs.renameSync(`${target}/content/h5p.json`, `${target}/h5p.json`);
+      fs.rmSync(`${target}/content/sessions`, { recursive: true, force: true });
+    }
     const files = getFileList(target);
     const zip = new admZip();
     for (let item of files) {
@@ -608,7 +623,7 @@ module.exports = {
     const registry = await module.exports.getRegistry();
     const libraryDirs = await module.exports.parseLibraryFolders();
     let libs = await module.exports.computeDependencies(library, 'view', null, libFolder);
-    const contentFile = `content/${contentFolder}/content.json`;
+    const contentFile = module.exports.contentJsonPath(contentFolder);
     if (!fs.existsSync(contentFile)) {
       return libs;
     }
@@ -694,7 +709,7 @@ module.exports = {
         minor: parseInt(version.minorVersion)
       };
     }
-    const contentFile = `content/${folder}/content.json`;
+    const contentFile = module.exports.contentJsonPath(folder);
     let content = fs.readFileSync(contentFile, 'utf-8');
     const backupContent = content;
     content = JSON.parse(content);
@@ -768,6 +783,20 @@ module.exports = {
       org
     }
     return output;
+  },
+  contentRoot: (folder) => {
+    const nested = `content/${folder}/content`;
+    if (fs.existsSync(`${nested}/content.json`) || fs.existsSync(nested)) {
+      return nested;
+    }
+    return `content/${folder}`;
+  },
+  contentJsonPath: (folder) => {
+    const nested = `content/${folder}/content/content.json`;
+    if (fs.existsSync(nested)) {
+      return nested;
+    }
+    return `content/${folder}/content.json`;
   },
   fromTemplate,
   parseGitUrl,
