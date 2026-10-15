@@ -5,3 +5,4 @@ package-lock.json
 /temp/*
 /uploads/*
 /content/*
+libraryRegistry.json
