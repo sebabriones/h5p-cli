@@ -1,7 +1,7 @@
 module.exports = {
   port: 8080,
   mediaTypes: ['images', 'audios', 'videos'],
-  themeControls: true,
+  themeControls: false,
   folders: {
     assets: 'assets',
     libraries: 'libraries',

@@ -23,9 +23,9 @@ content/<nombre>/content/audios/…
 
 Las actividades creadas con el CLI anterior, con `content.json` junto a `h5p.json`, siguen abriendo.
 
-## Arranque
+## Arranque en otro equipo
 
-Los comandos se ejecutan dentro de esta carpeta. `npx h5p` no usa este repositorio.
+Hace falta Git, Node.js y npm. Los comandos se ejecutan dentro de esta carpeta, después de clonar el repositorio. `npx h5p` no usa este repositorio.
 
 ```bash
 npm install
@@ -33,9 +33,17 @@ node h5p.js core
 node h5p.js server
 ```
 
+`npm install` baja las dependencias de Node. `core` se ejecuta una sola vez: clona `h5p-editor-php-library` y `h5p-php-library`, y prepara `h5p-math-display`. Hay que tener Git disponible y salida a internet.
+
 El panel queda en `http://localhost:8080/dashboard`.
 
-`core` clona `h5p-editor-php-library` y `h5p-php-library`, y prepara `h5p-math-display`. Hay que tener Git disponible.
+Para usar otro puerto:
+
+```bash
+node h5p.js server 8090
+```
+
+El servidor busca las librerías en la carpeta desde la que se lanzó. Para volver a levantarlo en ese equipo basta `node h5p.js server`; no hace falta repetir `core` si las librerías base ya están clonadas.
 
 Para una librería concreta, por ejemplo Course Presentation:
 
@@ -43,4 +51,4 @@ Para una librería concreta, por ejemplo Course Presentation:
 node h5p.js setup h5p-course-presentation
 ```
 
-El mismo patrón vale para el resto. `node h5p.js help` lista los comandos. El servidor busca las librerías en la carpeta desde la que se lanzó.
+El mismo patrón vale para el resto. `node h5p.js help` lista los comandos.
