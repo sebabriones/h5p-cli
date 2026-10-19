@@ -126,6 +126,50 @@ function dashboard(options) {
       this.handleError(error);
     }
   }
+  this.copy = async (project) => {
+    try {
+      const name = window.prompt('Nombre de la carpeta de la copia. Los espacios pasan a guiones.', `${project}-copia`);
+      if (!name) {
+        return;
+      }
+      this.showStatus('...');
+      const output = await (await fetch(`${options.api}/copy/${encodeURIComponent(project)}`, {
+        method: 'post',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ folder: name })
+      })).json();
+      if (output.error) {
+        throw new Error(output.error);
+      }
+      this.showStatus(`copiada en content/${output.result}`);
+      this.getPage();
+    }
+    catch (error) {
+      this.handleError(error);
+    }
+  }
+  this.rename = async (project) => {
+    try {
+      const name = window.prompt('Nuevo nombre de la carpeta. Los espacios pasan a guiones.', project);
+      if (!name || name === project) {
+        return;
+      }
+      this.showStatus('...');
+      const output = await (await fetch(`${options.api}/rename/${encodeURIComponent(project)}`, {
+        method: 'post',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ folder: name })
+      })).json();
+      if (output.error) {
+        throw new Error(output.error);
+      }
+      this.showStatus(`carpeta renombrada a content/${output.result}`);
+      this.getPage();
+    }
+    catch (error) {
+      this.handleError(error);
+    }
+  }
   this.remove = async (project) => {
     try {
       if (window.confirm(`Are you sure you want to delete "content/${project}"?`)) {

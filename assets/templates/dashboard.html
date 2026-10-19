@@ -83,6 +83,12 @@
           <a class="edit transition tooltip" href="edit/{library}/{folder}">
             <span class="tooltiptext">{lang_Edit}</span>
           </a>
+          <div class="button transition copy tooltip" onclick="runner.copy('{folder}')">
+            <span class="tooltiptext">{lang_Copy}</span>
+          </div>
+          <div class="button transition rename tooltip" onclick="runner.rename('{folder}')">
+            <span class="tooltiptext">{lang_Rename}</span>
+          </div>
           <div class="button transition delete tooltip" onclick="runner.remove('{folder}')">
             <span class="tooltiptext">{lang_Delete}</span>
           </div>

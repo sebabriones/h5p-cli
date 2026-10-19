@@ -189,6 +189,64 @@ module.exports = {
       handleError(error, response);
     }
   },
+  // copies a content folder and sets its title to the new folder name
+  copy: (request, response, next) => {
+    try {
+      const source = sanitizeContentFolder(request.params.folder);
+      const target = sanitizeContentFolder(request.body?.folder || `${source}-copia`);
+      if (!source || !target) {
+        throw new Error('folder name is empty');
+      }
+      if (source === target) {
+        throw new Error('choose a different folder name');
+      }
+      const sourcePath = `content/${source}`;
+      const targetPath = `content/${target}`;
+      if (!fs.existsSync(`${sourcePath}/h5p.json`)) {
+        throw new Error(`"content/${source}" was not found`);
+      }
+      if (fs.existsSync(targetPath)) {
+        throw new Error(`"content/${target}" already exists`);
+      }
+      fs.cpSync(sourcePath, targetPath, { recursive: true });
+      writeContentTitle(target, target);
+      response.set('Content-Type', 'application/json');
+      response.end(JSON.stringify({ result: target }));
+    }
+    catch (error) {
+      handleError(error, response);
+    }
+  },
+  // renames a content folder and its displayed title
+  rename: (request, response, next) => {
+    try {
+      const source = sanitizeContentFolder(request.params.folder);
+      const target = sanitizeContentFolder(request.body?.folder || '');
+      if (!source || !target) {
+        throw new Error('folder name is empty');
+      }
+      if (source === target) {
+        response.set('Content-Type', 'application/json');
+        response.end(JSON.stringify({ result: target }));
+        return;
+      }
+      const sourcePath = `content/${source}`;
+      const targetPath = `content/${target}`;
+      if (!fs.existsSync(`${sourcePath}/h5p.json`)) {
+        throw new Error(`"content/${source}" was not found`);
+      }
+      if (fs.existsSync(targetPath)) {
+        throw new Error(`"content/${target}" already exists`);
+      }
+      fs.renameSync(sourcePath, targetPath);
+      writeContentTitle(target, target);
+      response.set('Content-Type', 'application/json');
+      response.end(JSON.stringify({ result: target }));
+    }
+    catch (error) {
+      handleError(error, response);
+    }
+  },
   // deletes a content folder
   remove: (request, response, next) => {
     try {
@@ -229,17 +287,10 @@ module.exports = {
           folder: item
         });
       }
-      list.sort((a, b) => {
-        const first = a.title.toLowerCase();
-        const second = b.title.toLowerCase();
-        if (first < second) {
-          return -1;
-        }
-        if (first > second) {
-          return 1;
-        }
-        return 0;
-      });
+      list.sort((a, b) => a.title.localeCompare(b.title, undefined, {
+        numeric: true,
+        sensitivity: 'base'
+      }));
       output.total = list.length;
       for (let i = start; i < Math.min(end, list.length); i++) {
         let entry = registry.reversed?.[list[i].id];
@@ -862,6 +913,19 @@ const ajaxLibraries = async (options) => {
   }
   return output;
 }
+const sanitizeContentFolder = (name) => {
+  return String(name ?? '')
+    .replaceAll(/[^a-zA-Z0-9 _-]/g, '')
+    .replaceAll(' ', '-');
+}
+
+const writeContentTitle = (folder, title) => {
+  const infoFile = `content/${folder}/h5p.json`;
+  const info = JSON.parse(fs.readFileSync(infoFile, 'utf-8'));
+  info.title = title;
+  fs.writeFileSync(infoFile, JSON.stringify(info));
+}
+
 const handleError = (error, response) => {
   console.log(error);
   response.set('Content-Type', 'application/json');

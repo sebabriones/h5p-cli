@@ -15,6 +15,8 @@ app.get('/runnable', api.contentTypes);
 app.get('/export/:library/:folder', api.export);
 app.post('/import/:folder', multer.single('file'), api.import);
 app.post('/create/:type/:folder', api.create);
+app.post('/copy/:folder', api.copy);
+app.post('/rename/:folder', api.rename);
 app.post('/remove/:folder', api.remove);
 app.get('/split/:library/:folder', api.splitView);
 app.get('/view/:library/:folder', api.view);
