@@ -137,9 +137,12 @@ module.exports = {
     fs.rmSync(target, { recursive: true, force: true });
     return folder;
   },
-  // creates a thin .h5p archive: h5p.json at the root and content/ beside it, no libraries
+  // creates .h5p archive: h5p.json + content/ + player libraries (same as upstream/cli old)
   export: async (library, folder) => {
     await module.exports.generateInfo(folder, library);
+    const registry = await module.exports.getRegistry();
+    const libraryDirs = await module.exports.parseLibraryFolders();
+    const libFolder = libraryDirs[registry.regular[library].id];
     const source = `content/${folder}`;
     const target = `${config.folders.temp}/${folder}`;
     fs.rmSync(target, { recursive: true, force: true });
@@ -153,6 +156,18 @@ module.exports = {
       fs.cpSync(source, `${target}/content`, { recursive: true });
       fs.renameSync(`${target}/content/h5p.json`, `${target}/h5p.json`);
       fs.rmSync(`${target}/content/sessions`, { recursive: true, force: true });
+    }
+    // Player libs only (main + embeds from content.json), not editor/semantics optionals.
+    const libs = await module.exports.computePlayerDependencies(library, folder, libFolder);
+    for (let item in libs) {
+      const folderName = libraryDirs[libs[item].id];
+      if (!folderName) {
+        if (libs[item].optional) {
+          continue;
+        }
+        throw new Error(`missing library folder for ${libs[item].id || item}`);
+      }
+      fs.cpSync(`${config.folders.libraries}/${folderName}`, `${target}/${folderName}`, { recursive: true });
     }
     const files = getFileList(target);
     const zip = new admZip();

@@ -17,7 +17,7 @@ content/<nombre>/content/videos/…
 content/<nombre>/content/audios/…
 ```
 
-- El `.h5p` descargado lleva `h5p.json` en la raíz y la carpeta `content/` al lado. No incluye librerías: el visor las toma de su repositorio. `h5p.json` lista esas dependencias en `preloadedDependencies`.
+- El `.h5p` descargado lleva `h5p.json` en la raíz, la carpeta `content/` al lado y las librerías de reproductor usadas (principal + embeds de `content.json`), como el CLI base. `h5p.json` lista esas dependencias en `preloadedDependencies`.
 - El nombre de la actividad conserva letras, números, guion y guion bajo. `prueba_1` no pasa a `prueba1`.
 - No se crea la carpeta `sessions`.
 

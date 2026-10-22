@@ -178,8 +178,8 @@ module.exports = {
         return;
       }
       fs.mkdirSync(`${target}/content`, { recursive: true });
-      logic.generateInfo(request.params.folder, request.params.type);
       fs.writeFileSync(`${target}/content/content.json`, JSON.stringify({}));
+      await logic.generateInfo(request.params.folder, request.params.type);
       response.set('Content-Type', 'application/json');
       response.end(JSON.stringify({
         result: request.params.folder
