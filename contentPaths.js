@@ -197,6 +197,25 @@ const spaceHasActivities = (spaceName) => {
   return listActivities(assertSafeRelative(spaceName)).length > 0;
 };
 
+/** All section paths under content (flat list), deepest last. */
+const listAllSpacePaths = (parent = '', acc = []) => {
+  for (const item of listSpaces(parent)) {
+    acc.push(item.folder);
+    listAllSpacePaths(item.folder, acc);
+  }
+  return acc;
+};
+
+/** True if candidate is the same as or nested under ancestor. */
+const isUnderPath = (candidate, ancestor) => {
+  if (!ancestor) {
+    return false;
+  }
+  const a = assertSafeRelative(ancestor);
+  const c = assertSafeRelative(candidate);
+  return c === a || c.startsWith(`${a}/`);
+};
+
 module.exports = {
   CONTENT_ROOT,
   URL_SEP,
@@ -215,6 +234,8 @@ module.exports = {
   breadcrumbParts,
   listActivities,
   listSpaces,
+  listAllSpacePaths,
+  isUnderPath,
   spaceHasChildren,
   spaceHasActivities
 };

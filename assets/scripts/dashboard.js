@@ -266,6 +266,96 @@ function dashboard(options) {
       this.handleError(error);
     }
   }
+  this.pickDestination = async (currentParent, excludePath) => {
+    const result = await (await fetch(`${options.api}/destinations`)).json();
+    if (result.error) {
+      throw new Error(result.error);
+    }
+    const optionsList = (result.list || []).filter((item) => {
+      if (!excludePath) {
+        return true;
+      }
+      if (item.path === excludePath) {
+        return false;
+      }
+      return !(item.path && (item.path === excludePath || item.path.startsWith(`${excludePath}/`)));
+    });
+    const lines = optionsList.map((item, index) => `${index}: ${item.label}`).join('\n');
+    const currentHint = currentParent === '' ? 'raíz' : currentParent;
+    const answer = window.prompt(
+      `Destino (número o ruta).\nVacío = raíz.\nActual: ${currentHint}\n\n${lines}`,
+      currentParent || ''
+    );
+    if (answer === null) {
+      return null;
+    }
+    const trimmed = String(answer).trim();
+    if (trimmed === '') {
+      return '';
+    }
+    if (/^\d+$/.test(trimmed)) {
+      const picked = optionsList[Number(trimmed)];
+      if (!picked) {
+        throw new Error('destino inválido');
+      }
+      return picked.path;
+    }
+    return trimmed.replaceAll('\\', '/').replaceAll(/^\/+|\/+$/g, '');
+  }
+  this.parentOfUrl = (folderUrl) => {
+    const parts = String(folderUrl || '').split('::').filter(Boolean);
+    if (parts.length < 2) {
+      return '';
+    }
+    return parts.slice(0, -1).join('/');
+  }
+  this.move = async (project) => {
+    try {
+      const currentParent = this.parentOfUrl(project);
+      const parent = await this.pickDestination(currentParent);
+      if (parent === null) {
+        return;
+      }
+      this.showStatus('...');
+      const output = await (await fetch(`${options.api}/move/${encodeURIComponent(project)}`, {
+        method: 'post',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ parent })
+      })).json();
+      if (output.error) {
+        throw new Error(output.error);
+      }
+      this.showStatus(`movida a content/${String(output.result).split('::').join('/')}`);
+      this.getPage(currentPage);
+    }
+    catch (error) {
+      this.handleError(error);
+    }
+  }
+  this.moveSpace = async (spaceUrl, displayName) => {
+    try {
+      const currentParent = this.parentOfUrl(spaceUrl);
+      const diskPath = String(spaceUrl).split('::').join('/');
+      const parent = await this.pickDestination(currentParent, diskPath);
+      if (parent === null) {
+        return;
+      }
+      this.showStatus('...');
+      const output = await (await fetch(`${options.api}/spaces/${encodeURIComponent(spaceUrl)}/move`, {
+        method: 'post',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ parent })
+      })).json();
+      if (output.error) {
+        throw new Error(output.error);
+      }
+      this.showStatus(`sección movida a content/${output.result}`);
+      this.getPage(currentPage);
+    }
+    catch (error) {
+      this.handleError(error);
+    }
+  }
   this.copy = async (project) => {
     try {
       const base = this.basename(project);

@@ -288,6 +288,74 @@ module.exports = {
       handleError(error, response);
     }
   },
+  // move activity to another section (parent '' = root)
+  move: (request, response, next) => {
+    try {
+      const source = contentPaths.fromUrlFolder(request.params.folder);
+      const sourcePath = contentPaths.contentDir(source);
+      if (!contentPaths.isActivityDir(sourcePath)) {
+        throw new Error(`actividad "content/${source}" no encontrada`);
+      }
+      const parentRaw = request.body?.parent;
+      const parent = (parentRaw === undefined || parentRaw === null || parentRaw === '')
+        ? ''
+        : contentPaths.assertSafeRelative(String(parentRaw));
+      if (parent) {
+        const parentDir = contentPaths.contentDir(parent);
+        if (!fs.existsSync(parentDir) || !contentPaths.isSpaceDir(parentDir)) {
+          throw new Error(`sección destino "${parent}" no encontrada`);
+        }
+      }
+      const baseName = request.body?.folder
+        ? contentPaths.sanitizeSegment(request.body.folder)
+        : contentPaths.basenameOf(source);
+      const target = contentPaths.joinParent(parent, baseName);
+      if (source === target) {
+        response.set('Content-Type', 'application/json');
+        response.end(JSON.stringify({
+          result: contentPaths.toUrlFolder(target),
+          parent,
+          href: contentPaths.toDashboardHref(parent)
+        }));
+        return;
+      }
+      const targetPath = contentPaths.contentDir(target);
+      if (fs.existsSync(targetPath)) {
+        throw new Error(`"content/${target}" already exists`);
+      }
+      fs.renameSync(sourcePath, targetPath);
+      response.set('Content-Type', 'application/json');
+      response.end(JSON.stringify({
+        result: contentPaths.toUrlFolder(target),
+        parent,
+        href: contentPaths.toDashboardHref(parent)
+      }));
+    }
+    catch (error) {
+      handleError(error, response);
+    }
+  },
+  // list possible section destinations (including root)
+  destinations: (request, response, next) => {
+    try {
+      const paths = contentPaths.listAllSpacePaths();
+      const list = [
+        { path: '', label: 'Dashboard (raíz)', href: '/dashboard' }
+      ];
+      for (const item of paths) {
+        list.push({
+          path: item,
+          label: item.split('/').join(' / '),
+          href: contentPaths.toDashboardHref(item)
+        });
+      }
+      response.set('Content-Type', 'application/json');
+      response.end(JSON.stringify({ list }));
+    }
+    catch (error) {
+      handleError(error, response);
+    }
+  },
   // create space or subsection under optional parent
   createSpace: (request, response, next) => {
     try {
@@ -354,6 +422,51 @@ module.exports = {
       fs.rmSync(target, { recursive: true, force: true });
       response.set('Content-Type', 'application/json');
       response.end(JSON.stringify({ result: `eliminada la sección "content/${name}"` }));
+    }
+    catch (error) {
+      handleError(error, response);
+    }
+  },
+  // move section/sub-section under another parent ('' = root)
+  moveSpace: (request, response, next) => {
+    try {
+      const source = contentPaths.fromUrlFolder(request.params.space);
+      const sourcePath = contentPaths.contentDir(source);
+      if (!contentPaths.isSpaceDir(sourcePath)) {
+        throw new Error(`sección "${source}" no encontrada`);
+      }
+      const parentRaw = request.body?.parent;
+      const parent = (parentRaw === undefined || parentRaw === null || parentRaw === '')
+        ? ''
+        : contentPaths.assertSafeRelative(String(parentRaw));
+      if (parent) {
+        if (contentPaths.isUnderPath(parent, source)) {
+          throw new Error('no se puede mover una sección dentro de sí misma o de una hija');
+        }
+        const parentDir = contentPaths.contentDir(parent);
+        if (!fs.existsSync(parentDir) || !contentPaths.isSpaceDir(parentDir)) {
+          throw new Error(`sección destino "${parent}" no encontrada`);
+        }
+      }
+      const target = contentPaths.joinParent(parent, contentPaths.basenameOf(source));
+      if (source === target) {
+        response.set('Content-Type', 'application/json');
+        response.end(JSON.stringify({
+          result: target,
+          href: contentPaths.toDashboardHref(target)
+        }));
+        return;
+      }
+      const targetPath = contentPaths.contentDir(target);
+      if (fs.existsSync(targetPath)) {
+        throw new Error(`"content/${target}" already exists`);
+      }
+      fs.renameSync(sourcePath, targetPath);
+      response.set('Content-Type', 'application/json');
+      response.end(JSON.stringify({
+        result: target,
+        href: contentPaths.toDashboardHref(target)
+      }));
     }
     catch (error) {
       handleError(error, response);

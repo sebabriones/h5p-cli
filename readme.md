@@ -26,6 +26,7 @@ content/<nombre>/content/audios/…
   - Sub-sección (anidable): `content/<seccion>/<sub>/…` → `/dashboard/<seccion>/<sub>`.
   - En cada nivel, **New** e **Import** crean actividades ahí; el botón **Sección** / **Sub-sección** crea una carpeta hija.
   - Sección/sub-sección = carpeta sin `h5p.json`. Solo se puede borrar si no tiene hijas ni actividades.
+  - **Mover**: desde el dashboard se puede mover una actividad o una sección/sub-sección a la raíz u a otra sección (botón →).
   - Las actividades que ya existían en la raíz no se mueven solas.
 
 Las actividades creadas con el CLI anterior, con `content.json` junto a `h5p.json`, siguen abriendo.

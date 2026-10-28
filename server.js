@@ -15,9 +15,12 @@ app.get('/dashboard/*', (req, res, next) => {
   return api.dashboard(req, res, next);
 });
 app.get('/projects', api.projects);
+app.get('/destinations', api.destinations);
 app.post('/spaces', api.createSpace);
 app.post('/spaces/:space/rename', api.renameSpace);
 app.post('/spaces/:space/remove', api.removeSpace);
+app.post('/spaces/:space/move', api.moveSpace);
+app.post('/move/:folder', api.move);
 app.get('/runnable', api.contentTypes);
 app.get('/export/:library/:folder', api.export);
 app.post('/import/:folder', multer.single('file'), api.import);
