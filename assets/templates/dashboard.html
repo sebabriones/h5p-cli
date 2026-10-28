@@ -31,7 +31,13 @@
       spacesSection: 'spacesSection',
       content: 'content',
       pagination: 'pagination',
-      languages: 'languages'
+      languages: 'languages',
+      modal: 'dashModal',
+      modalTitle: 'dashModalTitle',
+      modalHint: 'dashModalHint',
+      modalBody: 'dashModalBody',
+      modalCancel: 'dashModalCancel',
+      modalOk: 'dashModalOk'
     },
     classes: {
       hidden: 'hidden'
@@ -143,6 +149,18 @@
     </div>
     <div class="pagination" id="pagination">
       <div class="button{selected}" onclick="{onclick}">{page}</div>
+    </div>
+  </div>
+  <div id="dashModal" class="dash-modal hidden" aria-hidden="true">
+    <div class="dash-modal-backdrop" data-modal-dismiss="1"></div>
+    <div class="dash-modal-dialog" role="dialog" aria-modal="true" aria-labelledby="dashModalTitle">
+      <h3 id="dashModalTitle" class="dash-modal-title"></h3>
+      <p id="dashModalHint" class="dash-modal-hint hidden"></p>
+      <div id="dashModalBody" class="dash-modal-body"></div>
+      <div class="dash-modal-actions">
+        <button type="button" class="button" id="dashModalCancel">Cancelar</button>
+        <button type="button" class="button dash-modal-primary" id="dashModalOk">Aceptar</button>
+      </div>
     </div>
   </div>
 </body>

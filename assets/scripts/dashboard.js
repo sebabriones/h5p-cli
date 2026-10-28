@@ -23,6 +23,14 @@ function dashboard(options) {
   let spaceEntry;
   let link;
   let currentPage = 0;
+  let modal;
+  let modalTitle;
+  let modalHint;
+  let modalBody;
+  let modalCancel;
+  let modalOk;
+  let modalResolver = null;
+  let modalKeyHandler = null;
   this.init = () => {
     options.limit = options.limit || 10;
     options.space = options.space || '';
@@ -48,6 +56,12 @@ function dashboard(options) {
       content = document.getElementById(options.ids.content);
       pagination = document.getElementById(options.ids.pagination);
       languages = document.getElementById(options.ids.languages);
+      modal = document.getElementById(options.ids.modal);
+      modalTitle = document.getElementById(options.ids.modalTitle);
+      modalHint = document.getElementById(options.ids.modalHint);
+      modalBody = document.getElementById(options.ids.modalBody);
+      modalCancel = document.getElementById(options.ids.modalCancel);
+      modalOk = document.getElementById(options.ids.modalOk);
       entry = content.innerHTML;
       spaceEntry = spaces.innerHTML;
       link = pagination.innerHTML;
@@ -58,12 +72,114 @@ function dashboard(options) {
       if (sectionsTitle) {
         sectionsTitle.innerText = options.sectionsTitle || (options.space ? 'Sub-secciones' : 'Secciones');
       }
+      this.bindModalChrome();
       this.getPage();
       this.getContentTypes();
       this.setLanguages();
       if (status.innerText) {
         this.showStatus();
       }
+    });
+  }
+  this.bindModalChrome = () => {
+    if (!modal) {
+      return;
+    }
+    modalCancel.addEventListener('click', () => this.closeModal(null));
+    modal.querySelector('[data-modal-dismiss]')?.addEventListener('click', () => this.closeModal(null));
+  }
+  this.closeModal = (value) => {
+    if (!modal || !modalResolver) {
+      return;
+    }
+    const resolve = modalResolver;
+    modalResolver = null;
+    if (modalKeyHandler) {
+      window.removeEventListener('keydown', modalKeyHandler);
+      modalKeyHandler = null;
+    }
+    modal.classList.add(options.classes.hidden);
+    modal.setAttribute('aria-hidden', 'true');
+    modalOk.classList.remove('dash-modal-danger');
+    resolve(value);
+  }
+  this.openModal = ({ title, hint = '', bodyHtml = '', okLabel = 'Aceptar', cancelLabel = 'Cancelar', danger = false, onReady, getValue }) => {
+    return new Promise((resolve) => {
+      if (!modal) {
+        resolve(null);
+        return;
+      }
+      if (modalResolver) {
+        this.closeModal(null);
+      }
+      modalResolver = resolve;
+      modalTitle.textContent = title || '';
+      if (hint) {
+        modalHint.textContent = hint;
+        modalHint.classList.remove(options.classes.hidden);
+      }
+      else {
+        modalHint.textContent = '';
+        modalHint.classList.add(options.classes.hidden);
+      }
+      modalBody.innerHTML = bodyHtml;
+      modalCancel.textContent = cancelLabel;
+      modalOk.textContent = okLabel;
+      modalOk.classList.toggle('dash-modal-danger', Boolean(danger));
+      modalOk.onclick = () => {
+        const value = typeof getValue === 'function' ? getValue() : true;
+        this.closeModal(value);
+      };
+      modal.classList.remove(options.classes.hidden);
+      modal.setAttribute('aria-hidden', 'false');
+      modalKeyHandler = (event) => {
+        if (event.key === 'Escape') {
+          event.preventDefault();
+          this.closeModal(null);
+        }
+        else if (event.key === 'Enter' && event.target?.tagName === 'INPUT') {
+          event.preventDefault();
+          modalOk.click();
+        }
+      };
+      window.addEventListener('keydown', modalKeyHandler);
+      if (typeof onReady === 'function') {
+        onReady();
+      }
+    });
+  }
+  this.promptName = ({ title, hint, defaultValue = '', okLabel = 'Aceptar' }) => {
+    const escaped = String(defaultValue || '')
+      .replaceAll('&', '&amp;')
+      .replaceAll('"', '&quot;')
+      .replaceAll('<', '&lt;');
+    return this.openModal({
+      title,
+      hint,
+      okLabel,
+      bodyHtml: `<input type="text" class="dash-modal-input" id="dashModalInput" value="${escaped}" autocomplete="off" spellcheck="false">`,
+      onReady: () => {
+        const input = document.getElementById('dashModalInput');
+        if (!input) {
+          return;
+        }
+        input.focus();
+        input.select();
+      },
+      getValue: () => {
+        const input = document.getElementById('dashModalInput');
+        return input ? input.value.trim() : '';
+      }
+    });
+  }
+  this.confirmAction = ({ title, message, okLabel = 'Eliminar' }) => {
+    return this.openModal({
+      title,
+      hint: message,
+      okLabel,
+      danger: true,
+      bodyHtml: '',
+      getValue: () => true
     });
   }
   this.parentQuery = () => {
@@ -228,8 +344,14 @@ function dashboard(options) {
   }
   this.renameSpace = async (spaceUrl, displayName) => {
     try {
-      const name = window.prompt('Nuevo nombre. Los espacios pasan a guiones.', displayName || this.basename(spaceUrl));
-      if (!name || name === (displayName || this.basename(spaceUrl))) {
+      const current = displayName || this.basename(spaceUrl);
+      const name = await this.promptName({
+        title: 'Renombrar sección',
+        hint: 'Los espacios pasan a guiones. Solo cambia el nombre en este nivel.',
+        defaultValue: current,
+        okLabel: 'Renombrar'
+      });
+      if (name === null || !name || name === current) {
         return;
       }
       this.showStatus('...');
@@ -251,7 +373,12 @@ function dashboard(options) {
   this.removeSpace = async (spaceUrl, displayName) => {
     try {
       const label = displayName || this.basename(spaceUrl);
-      if (!window.confirm(`¿Eliminar "${label}"? Debe estar vacío (sin sub-secciones ni actividades).`)) {
+      const confirmed = await this.confirmAction({
+        title: 'Eliminar sección',
+        message: `¿Eliminar "${label}"? Debe estar vacío (sin sub-secciones ni actividades).`,
+        okLabel: 'Eliminar'
+      });
+      if (!confirmed) {
         return;
       }
       this.showStatus('...');
@@ -265,6 +392,13 @@ function dashboard(options) {
     catch (error) {
       this.handleError(error);
     }
+  }
+  this.escapeHtml = (value) => {
+    return String(value ?? '')
+      .replaceAll('&', '&amp;')
+      .replaceAll('<', '&lt;')
+      .replaceAll('>', '&gt;')
+      .replaceAll('"', '&quot;');
   }
   this.pickDestination = async (currentParent, excludePath) => {
     const result = await (await fetch(`${options.api}/destinations`)).json();
@@ -280,27 +414,43 @@ function dashboard(options) {
       }
       return !(item.path && (item.path === excludePath || item.path.startsWith(`${excludePath}/`)));
     });
-    const lines = optionsList.map((item, index) => `${index}: ${item.label}`).join('\n');
-    const currentHint = currentParent === '' ? 'raíz' : currentParent;
-    const answer = window.prompt(
-      `Destino (número o ruta).\nVacío = raíz.\nActual: ${currentHint}\n\n${lines}`,
-      currentParent || ''
-    );
-    if (answer === null) {
-      return null;
+    if (!optionsList.length) {
+      throw new Error('no hay destinos disponibles');
     }
-    const trimmed = String(answer).trim();
-    if (trimmed === '') {
-      return '';
-    }
-    if (/^\d+$/.test(trimmed)) {
-      const picked = optionsList[Number(trimmed)];
-      if (!picked) {
-        throw new Error('destino inválido');
+    const currentHint = currentParent === '' ? 'Dashboard (raíz)' : currentParent.split('/').join(' / ');
+    const hasCurrent = optionsList.some((item) => item.path === (currentParent || ''));
+    const bodyHtml = [
+      '<div class="dash-modal-destinations" role="radiogroup" aria-label="Destino">'
+    ];
+    optionsList.forEach((item, index) => {
+      const checked = (hasCurrent ? item.path === (currentParent || '') : index === 0) ? ' checked' : '';
+      const id = `dest-${this.escapeHtml(item.path || 'root').replaceAll(/[^a-zA-Z0-9_-]/g, '_')}`;
+      bodyHtml.push(
+        `<label class="dash-modal-dest-option" for="${id}">` +
+        `<input type="radio" name="dashModalDest" id="${id}" value="${this.escapeHtml(item.path)}"${checked}>` +
+        `<span>${this.escapeHtml(item.label)}</span>` +
+        `</label>`
+      );
+    });
+    bodyHtml.push('</div>');
+    const selected = await this.openModal({
+      title: 'Mover a…',
+      hint: `Ubicación actual: ${currentHint}`,
+      okLabel: 'Mover',
+      bodyHtml: bodyHtml.join(''),
+      onReady: () => {
+        const checked = modalBody.querySelector('input[name="dashModalDest"]:checked');
+        (checked || modalBody.querySelector('input[name="dashModalDest"]'))?.focus();
+      },
+      getValue: () => {
+        const checked = modalBody.querySelector('input[name="dashModalDest"]:checked');
+        if (!checked) {
+          return null;
+        }
+        return checked.value;
       }
-      return picked.path;
-    }
-    return trimmed.replaceAll('\\', '/').replaceAll(/^\/+|\/+$/g, '');
+    });
+    return selected;
   }
   this.parentOfUrl = (folderUrl) => {
     const parts = String(folderUrl || '').split('::').filter(Boolean);
@@ -359,8 +509,13 @@ function dashboard(options) {
   this.copy = async (project) => {
     try {
       const base = this.basename(project);
-      const name = window.prompt('Nombre de la carpeta de la copia. Los espacios pasan a guiones.', `${base}-copia`);
-      if (!name) {
+      const name = await this.promptName({
+        title: 'Copiar actividad',
+        hint: 'Nombre de la carpeta de la copia. Los espacios pasan a guiones.',
+        defaultValue: `${base}-copia`,
+        okLabel: 'Copiar'
+      });
+      if (name === null || !name) {
         return;
       }
       this.showStatus('...');
@@ -381,8 +536,14 @@ function dashboard(options) {
   }
   this.rename = async (project, baseName) => {
     try {
-      const name = window.prompt('Nuevo nombre de la carpeta. Los espacios pasan a guiones.', baseName || this.basename(project));
-      if (!name || name === (baseName || this.basename(project))) {
+      const current = baseName || this.basename(project);
+      const name = await this.promptName({
+        title: 'Renombrar actividad',
+        hint: 'Nuevo nombre de la carpeta. Los espacios pasan a guiones.',
+        defaultValue: current,
+        okLabel: 'Renombrar'
+      });
+      if (name === null || !name || name === current) {
         return;
       }
       this.showStatus('...');
@@ -403,15 +564,22 @@ function dashboard(options) {
   }
   this.remove = async (project) => {
     try {
-      if (window.confirm(`¿Eliminar "content/${String(project).split('::').join('/')}"?`)) {
-        this.showStatus('...');
-        const output = await (await fetch(`${options.api}/remove/${encodeURIComponent(project)}`, {method: 'post'})).json();
-        if (output.error) {
-          throw new Error(output.error);
-        }
-        this.showStatus(output.result);
-        this.getPage(currentPage);
+      const pathLabel = String(project).split('::').join('/');
+      const confirmed = await this.confirmAction({
+        title: 'Eliminar actividad',
+        message: `¿Eliminar "content/${pathLabel}"? Esta acción no se puede deshacer.`,
+        okLabel: 'Eliminar'
+      });
+      if (!confirmed) {
+        return;
       }
+      this.showStatus('...');
+      const output = await (await fetch(`${options.api}/remove/${encodeURIComponent(project)}`, {method: 'post'})).json();
+      if (output.error) {
+        throw new Error(output.error);
+      }
+      this.showStatus(output.result);
+      this.getPage(currentPage);
     }
     catch (error) {
       this.handleError(error);
