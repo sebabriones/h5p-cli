@@ -53,10 +53,10 @@ function dashboard(options) {
       link = pagination.innerHTML;
       option = contentTypes.innerHTML;
       if (newSpaceButtonLabel) {
-        newSpaceButtonLabel.innerText = options.sectionButtonLabel || (options.space ? 'Sección' : 'Espacio');
+        newSpaceButtonLabel.innerText = options.sectionButtonLabel || (options.space ? 'Sub-sección' : 'Sección');
       }
       if (sectionsTitle) {
-        sectionsTitle.innerText = options.sectionsTitle || (options.space ? 'Secciones' : 'Espacios');
+        sectionsTitle.innerText = options.sectionsTitle || (options.space ? 'Sub-secciones' : 'Secciones');
       }
       this.getPage();
       this.getContentTypes();
@@ -121,8 +121,8 @@ function dashboard(options) {
         });
       }
       const emptySpaces = options.space
-        ? 'No hay secciones en este nivel.'
-        : 'No hay espacios. Crea uno para organizar actividades.';
+        ? 'No hay sub-secciones en este nivel.'
+        : 'No hay secciones. Crea una para organizar actividades.';
       spaces.innerHTML = spacesHTML || `<p class="empty-hint">${emptySpaces}</p>`;
       for (let item of result.list) {
         contentHTML += this.fromTemplate(entry, {
@@ -251,7 +251,7 @@ function dashboard(options) {
   this.removeSpace = async (spaceUrl, displayName) => {
     try {
       const label = displayName || this.basename(spaceUrl);
-      if (!window.confirm(`¿Eliminar "${label}"? Debe estar vacío (sin secciones ni actividades).`)) {
+      if (!window.confirm(`¿Eliminar "${label}"? Debe estar vacío (sin sub-secciones ni actividades).`)) {
         return;
       }
       this.showStatus('...');

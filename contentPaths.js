@@ -7,7 +7,7 @@ const URL_SEP = '::';
 /**
  * Contrato:
  * - Actividad: carpeta con h5p.json
- * - Espacio / subsección: carpeta sin h5p.json (anidable)
+ * - Sección / sub-sección: carpeta sin h5p.json (anidable)
  * - Raíz: content/
  */
 

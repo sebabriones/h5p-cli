@@ -24,7 +24,7 @@ module.exports = {
       handleError(error, response);
     }
   },
-  // renders dashboard (root or /dashboard/espacio[/seccion...])
+  // renders dashboard (root or /dashboard/seccion[/sub-seccion...])
   dashboard: async (request, response, next) => {
     try {
       manageSession(null, {
@@ -37,7 +37,7 @@ module.exports = {
         space = contentPaths.fromDashboardPath(rawPath);
         const spaceDir = contentPaths.contentDir(space);
         if (!fs.existsSync(spaceDir) || !contentPaths.isSpaceDir(spaceDir)) {
-          throw new Error(`space "${space}" was not found`);
+          throw new Error(`sección "${space}" was not found`);
         }
       }
       const html = fs.readFileSync(`${require.main.path}/${config.folders.assets}/templates/dashboard.html`, 'utf-8');
@@ -57,8 +57,8 @@ module.exports = {
         space,
         spaceJson: JSON.stringify(space),
         spaceLabel: space ? contentPaths.basenameOf(space) : '',
-        sectionButtonLabel: space ? 'Sección' : 'Espacio',
-        sectionsTitle: space ? 'Secciones' : 'Espacios',
+        sectionButtonLabel: space ? 'Sub-sección' : 'Sección',
+        sectionsTitle: space ? 'Sub-secciones' : 'Secciones',
         breadcrumbRootLabel: labels.lang_dashboard || 'Dashboard'
       }
       input = {...input, ...labels};
@@ -202,7 +202,7 @@ module.exports = {
       if (parent) {
         const spaceDir = contentPaths.contentDir(parent);
         if (!fs.existsSync(spaceDir) || !contentPaths.isSpaceDir(spaceDir)) {
-          throw new Error(`space "${parent}" was not found`);
+          throw new Error(`sección "${parent}" no encontrada`);
         }
       }
       fs.mkdirSync(`${target}/content`, { recursive: true });
@@ -296,7 +296,7 @@ module.exports = {
       if (parent) {
         const parentDir = contentPaths.contentDir(parent);
         if (!fs.existsSync(parentDir) || !contentPaths.isSpaceDir(parentDir)) {
-          throw new Error(`space "${parent}" was not found`);
+          throw new Error(`sección "${parent}" no encontrada`);
         }
       }
       const name = contentPaths.sanitizeSegment(request.body?.name || request.body?.folder || '');
@@ -322,7 +322,7 @@ module.exports = {
       const sourcePath = contentPaths.contentDir(source);
       const targetPath = contentPaths.contentDir(target);
       if (!contentPaths.isSpaceDir(sourcePath)) {
-        throw new Error(`space "${source}" was not found`);
+        throw new Error(`sección "${source}" no encontrada`);
       }
       if (source === target) {
         response.set('Content-Type', 'application/json');
@@ -346,14 +346,14 @@ module.exports = {
       const name = contentPaths.fromUrlFolder(request.params.space);
       const target = contentPaths.contentDir(name);
       if (!contentPaths.isSpaceDir(target)) {
-        throw new Error(`space "${name}" was not found`);
+        throw new Error(`sección "${name}" no encontrada`);
       }
       if (contentPaths.spaceHasChildren(name)) {
-        throw new Error('the space still has sections or activities; delete them first');
+        throw new Error('la sección aún tiene sub-secciones o actividades; elimínalas primero');
       }
       fs.rmSync(target, { recursive: true, force: true });
       response.set('Content-Type', 'application/json');
-      response.end(JSON.stringify({ result: `removed space "content/${name}"` }));
+      response.end(JSON.stringify({ result: `eliminada la sección "content/${name}"` }));
     }
     catch (error) {
       handleError(error, response);
@@ -371,7 +371,7 @@ module.exports = {
       if (parent) {
         const spaceDir = contentPaths.contentDir(parent);
         if (!fs.existsSync(spaceDir) || !contentPaths.isSpaceDir(spaceDir)) {
-          throw new Error(`space "${parent}" was not found`);
+          throw new Error(`sección "${parent}" no encontrada`);
         }
       }
       const libraryDirs = await logic.parseLibraryFolders();
