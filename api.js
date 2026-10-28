@@ -37,7 +37,7 @@ module.exports = {
         space = contentPaths.fromDashboardPath(rawPath);
         const spaceDir = contentPaths.contentDir(space);
         if (!fs.existsSync(spaceDir) || !contentPaths.isSpaceDir(spaceDir)) {
-          throw new Error(`sección "${space}" was not found`);
+          throw new Error(`sección "${space}" no encontrada`);
         }
       }
       const html = fs.readFileSync(`${require.main.path}/${config.folders.assets}/templates/dashboard.html`, 'utf-8');
@@ -195,7 +195,7 @@ module.exports = {
       if (fs.existsSync(target)) {
         response.set('Content-Type', 'application/json');
         response.end(JSON.stringify({
-          error: `"${target}" folder already exists`
+          error: `la carpeta "${target}" ya existe`
         }));
         return;
       }
@@ -225,15 +225,15 @@ module.exports = {
       const requestedName = request.body?.folder || `${contentPaths.basenameOf(source)}-copia`;
       const target = contentPaths.joinParent(parent, requestedName);
       if (source === target) {
-        throw new Error('choose a different folder name');
+        throw new Error('elige otro nombre de carpeta');
       }
       const sourcePath = contentPaths.contentDir(source);
       const targetPath = contentPaths.contentDir(target);
       if (!contentPaths.isActivityDir(sourcePath)) {
-        throw new Error(`"content/${source}" was not found`);
+        throw new Error(`actividad "content/${source}" no encontrada`);
       }
       if (fs.existsSync(targetPath)) {
-        throw new Error(`"content/${target}" already exists`);
+        throw new Error(`la carpeta "content/${target}" ya existe`);
       }
       fs.cpSync(sourcePath, targetPath, { recursive: true });
       writeContentTitle(target, contentPaths.basenameOf(target));
@@ -258,10 +258,10 @@ module.exports = {
       const sourcePath = contentPaths.contentDir(source);
       const targetPath = contentPaths.contentDir(target);
       if (!contentPaths.isActivityDir(sourcePath)) {
-        throw new Error(`"content/${source}" was not found`);
+        throw new Error(`actividad "content/${source}" no encontrada`);
       }
       if (fs.existsSync(targetPath)) {
-        throw new Error(`"content/${target}" already exists`);
+        throw new Error(`la carpeta "content/${target}" ya existe`);
       }
       fs.renameSync(sourcePath, targetPath);
       writeContentTitle(target, contentPaths.basenameOf(target));
@@ -278,11 +278,11 @@ module.exports = {
       const relative = contentPaths.fromUrlFolder(request.params.folder);
       const target = contentPaths.contentDir(relative);
       if (!contentPaths.isActivityDir(target)) {
-        throw new Error(`"content/${relative}" was not found`);
+        throw new Error(`actividad "content/${relative}" no encontrada`);
       }
       fs.rmSync(target, { recursive: true, force: true });
       response.set('Content-Type', 'application/json');
-      response.end(JSON.stringify({result: `removed "content/${relative}"`}));
+      response.end(JSON.stringify({result: `eliminada "content/${relative}"`}));
     }
     catch (error) {
       handleError(error, response);
@@ -321,7 +321,7 @@ module.exports = {
       }
       const targetPath = contentPaths.contentDir(target);
       if (fs.existsSync(targetPath)) {
-        throw new Error(`"content/${target}" already exists`);
+        throw new Error(`la carpeta "content/${target}" ya existe`);
       }
       fs.renameSync(sourcePath, targetPath);
       response.set('Content-Type', 'application/json');
@@ -371,7 +371,7 @@ module.exports = {
       const relative = contentPaths.joinParent(parent, name);
       const target = contentPaths.contentDir(relative);
       if (fs.existsSync(target)) {
-        throw new Error(`"content/${relative}" already exists`);
+        throw new Error(`la carpeta "content/${relative}" ya existe`);
       }
       fs.mkdirSync(target, { recursive: true });
       response.set('Content-Type', 'application/json');
@@ -398,7 +398,7 @@ module.exports = {
         return;
       }
       if (fs.existsSync(targetPath)) {
-        throw new Error(`"content/${target}" already exists`);
+        throw new Error(`la carpeta "content/${target}" ya existe`);
       }
       fs.renameSync(sourcePath, targetPath);
       response.set('Content-Type', 'application/json');
@@ -459,7 +459,7 @@ module.exports = {
       }
       const targetPath = contentPaths.contentDir(target);
       if (fs.existsSync(targetPath)) {
-        throw new Error(`"content/${target}" already exists`);
+        throw new Error(`la carpeta "content/${target}" ya existe`);
       }
       fs.renameSync(sourcePath, targetPath);
       response.set('Content-Type', 'application/json');

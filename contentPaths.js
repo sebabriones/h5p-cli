@@ -1,8 +1,13 @@
 const fs = require('fs');
 const path = require('path');
 
-const CONTENT_ROOT = 'content';
+let CONTENT_ROOT = 'content';
 const URL_SEP = '::';
+
+/** Solo para tests: apunta el árbol a un directorio temporal. */
+const setContentRoot = (root) => {
+  CONTENT_ROOT = root || 'content';
+};
 
 /**
  * Contrato:
@@ -22,15 +27,15 @@ const sanitizeSegment = (name) => {
 const assertSafeRelative = (relative) => {
   const normalized = String(relative ?? '').replaceAll('\\', '/').replaceAll(/^\/+|\/+$/g, '');
   if (!normalized) {
-    throw new Error('path is empty');
+    throw new Error('la ruta está vacía');
   }
   const parts = normalized.split('/').filter(Boolean);
   if (parts.some((part) => part === '.' || part === '..' || part.includes('\0'))) {
-    throw new Error('invalid path');
+    throw new Error('ruta no válida');
   }
   for (const part of parts) {
     if (sanitizeSegment(part) !== part) {
-      throw new Error(`invalid path segment: ${part}`);
+      throw new Error(`segmento de ruta no válido: ${part}`);
     }
   }
   return parts.join('/');
@@ -69,7 +74,7 @@ const fromUrlFolder = (urlFolder) => {
     return '';
   }
   if (raw.includes('/') || raw.includes('\\')) {
-    throw new Error('invalid folder encoding');
+    throw new Error('codificación de carpeta no válida');
   }
   const relative = raw.split(URL_SEP).filter(Boolean).join('/');
   return assertSafeRelative(relative);
@@ -95,7 +100,7 @@ const toDashboardHref = (relativePath) => {
 const joinParent = (parent, name) => {
   const segment = sanitizeSegment(name);
   if (!segment) {
-    throw new Error('folder name is empty');
+    throw new Error('el nombre de carpeta está vacío');
   }
   if (!parent) {
     return segment;
@@ -217,8 +222,11 @@ const isUnderPath = (candidate, ancestor) => {
 };
 
 module.exports = {
-  CONTENT_ROOT,
+  get CONTENT_ROOT() {
+    return CONTENT_ROOT;
+  },
   URL_SEP,
+  setContentRoot,
   sanitizeSegment,
   assertSafeRelative,
   contentDir,

@@ -26,10 +26,19 @@ content/<nombre>/content/audios/…
   - Sub-sección (anidable): `content/<seccion>/<sub>/…` → `/dashboard/<seccion>/<sub>`.
   - En cada nivel, **New** e **Import** crean actividades ahí; el botón **Sección** / **Sub-sección** crea una carpeta hija.
   - Sección/sub-sección = carpeta sin `h5p.json`. Solo se puede borrar si no tiene hijas ni actividades.
-  - **Mover**: desde el dashboard se puede mover una actividad o una sección/sub-sección a la raíz u a otra sección (botón →).
+  - **Mover**: desde el dashboard se puede mover una actividad o una sección/sub-sección a la raíz u a otra sección (botón →). No se puede mover una sección dentro de sí misma ni de una hija.
+  - En URLs de editar/ver/exportar, las rutas anidadas usan `::` (por ejemplo `ingles::unidad-1::quiz`).
   - Las actividades que ya existían en la raíz no se mueven solas.
 
 Las actividades creadas con el CLI anterior, con `content.json` junto a `h5p.json`, siguen abriendo.
+
+## Tests
+
+```bash
+npm test
+```
+
+Cubre `contentPaths` (codificación URL, breadcrumbs, listado de secciones/actividades y detección de hijas) con el runner nativo de Node (`node --test`).
 
 ## Arranque en otro equipo
 

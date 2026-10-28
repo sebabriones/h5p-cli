@@ -11,6 +11,9 @@
   "bin": {
     "h5p": "./h5p.js"
   },
+  "scripts": {
+    "test": "node --test test/**/*.test.js"
+  },
   "dependencies": {
     "adm-zip": "0.6.1",
     "archiver": "^5.3.1",
