@@ -169,6 +169,73 @@ body {
   text-transform: capitalize;
   margin-right: 0.85em;
 }
+
+/******* SPACES (dashboard) *******/
+.breadcrumb {
+  margin: 0 0 1.25em 0;
+  font-size: 0.95em;
+  color: #445;
+}
+.breadcrumb a {
+  color: #303F9F;
+  text-decoration: none;
+}
+.breadcrumb a:hover {
+  text-decoration: underline;
+}
+.breadcrumb-sep {
+  margin: 0 0.35em;
+  color: #889;
+}
+.breadcrumb-current {
+  font-weight: 600;
+  color: #223;
+}
+.section-title {
+  margin: 0 0 0.75em 0;
+  font-size: 1.05em;
+  color: #303F9F;
+  letter-spacing: 0.5px;
+}
+.spaces-section {
+  margin-bottom: 2em;
+}
+.spaces {
+  display: flex;
+  flex-direction: column;
+  gap: 0.5em;
+}
+.space-item {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 1em;
+  background: #eef2fb;
+  border: 1px solid #c5cee8;
+  border-radius: 6px;
+  padding: 0.65em 0.85em;
+}
+.space-link {
+  font-weight: 600;
+  color: #1a2f53;
+  text-decoration: none;
+}
+.space-link:hover {
+  text-decoration: underline;
+}
+.space-actions {
+  display: flex;
+  gap: 0.35em;
+}
+.button.new-space:before {
+  content: "+";
+  margin-right: 0.35em;
+}
+.empty-hint {
+  color: #667;
+  font-size: 0.9em;
+  padding: 0.5em 0 1em 0;
+}
 #links {
   width: 100%;
   display: flex;

@@ -4,6 +4,7 @@ const he = require('he');
 const { imageSize } = require('image-size');
 const logic = require('./logic.js');
 const config = require('./configLoader.js');
+const contentPaths = require('./contentPaths.js');
 const l10n = require('./assets/l10n.json');
 const supportedLanguages = require(`${require.main.path}/${config.folders.assets}/languageCatcher.js`);
 let session = {
@@ -23,13 +24,24 @@ module.exports = {
       handleError(error, response);
     }
   },
-  // renders dashboard
+  // renders dashboard (root or /dashboard/:space)
   dashboard: async (request, response, next) => {
     try {
       manageSession(null, {
         language: request.query?.language,
         name: request.query?.session
       });
+      let space = '';
+      if (request.params.space) {
+        space = contentPaths.sanitizeSegment(request.params.space);
+        if (!space || space !== request.params.space) {
+          throw new Error('invalid space name');
+        }
+        const spaceDir = contentPaths.contentDir(space);
+        if (!fs.existsSync(spaceDir) || !contentPaths.isSpaceDir(spaceDir)) {
+          throw new Error(`space "${space}" was not found`);
+        }
+      }
       const html = fs.readFileSync(`${require.main.path}/${config.folders.assets}/templates/dashboard.html`, 'utf-8');
       const labels = await getLangLabels();
       const languageFiles = logic.getFileList(`${config.folders.libraries}/h5p-editor-php-library/language`);
@@ -43,7 +55,11 @@ module.exports = {
         api: config.api,
         status: session.status,
         language: session.language,
-        languages: JSON.stringify(languages)
+        languages: JSON.stringify(languages),
+        space,
+        spaceJson: JSON.stringify(space),
+        breadcrumbRootLabel: labels.lang_dashboard || 'Dashboard',
+        breadcrumbSpaceLabel: space || ''
       }
       input = {...input, ...labels};
       response.set('Content-Type', 'text/html');
@@ -92,6 +108,7 @@ module.exports = {
   // updates session file used for resume functionality
   setUserData: (request, response, next) => {
     try {
+      normalizeFolderParam(request);
       manageSession(request.params.folder, {
         language: request.query?.language,
         name: request.query?.session
@@ -111,6 +128,7 @@ module.exports = {
   // deletes the session file used for resume functionality
   resetUserData: (request, response, next) => {
     try {
+      normalizeFolderParam(request);
       const dataFile = `content/${request.params.folder}/sessions/${session.name}.json`;
       response.set('Content-Type', 'application/json');
       if (fs.existsSync(dataFile)) {
@@ -128,6 +146,7 @@ module.exports = {
   // retrieves session data for resume functionality
   getUserData: (request, response, next) => {
     try {
+      normalizeFolderParam(request);
       manageSession(request.params.folder, {
         language: request.query?.language,
         name: request.query?.session
@@ -143,12 +162,13 @@ module.exports = {
   // import zipped archive of content type
   import: (request, response, next) => {
     try {
-      request.params.folder = request.params.folder.replaceAll(/[^a-zA-Z0-9 _-]/g, '');
-      request.params.folder = request.params.folder.replaceAll(' ', '-');
-      const path = logic.import(request.params.folder, request.file.path);
+      const parent = resolveParentQuery(request);
+      const name = contentPaths.sanitizeSegment(request.params.folder);
+      const relative = contentPaths.joinParent(parent, name);
+      const imported = logic.import(relative, request.file.path);
       fs.rmSync(request.file.path);
       response.set('Content-Type', 'application/json');
-      response.end(JSON.stringify({path}));
+      response.end(JSON.stringify({ path: imported }));
     }
     catch (error) {
       handleError(error, response);
@@ -157,6 +177,7 @@ module.exports = {
   // download zipped archive of content type
   export: async (request, response, next) => {
     try {
+      normalizeFolderParam(request);
       const file = await logic.export(request.params.library, request.params.folder);
       response.download(file);
     }
@@ -167,9 +188,10 @@ module.exports = {
   // create empty content type
   create: async (request, response, next) => {
     try {
-      request.params.folder = request.params.folder.replaceAll(/[^a-zA-Z0-9 _-]/g, '');
-      request.params.folder = request.params.folder.replaceAll(' ', '-');
-      const target = `content/${request.params.folder}`;
+      const parent = resolveParentQuery(request);
+      const name = contentPaths.sanitizeSegment(request.params.folder);
+      const relative = contentPaths.joinParent(parent, name);
+      const target = contentPaths.contentDir(relative);
       if (fs.existsSync(target)) {
         response.set('Content-Type', 'application/json');
         response.end(JSON.stringify({
@@ -177,12 +199,18 @@ module.exports = {
         }));
         return;
       }
+      if (parent) {
+        const spaceDir = contentPaths.contentDir(parent);
+        if (!fs.existsSync(spaceDir) || !contentPaths.isSpaceDir(spaceDir)) {
+          throw new Error(`space "${parent}" was not found`);
+        }
+      }
       fs.mkdirSync(`${target}/content`, { recursive: true });
       fs.writeFileSync(`${target}/content/content.json`, JSON.stringify({}));
-      await logic.generateInfo(request.params.folder, request.params.type);
+      await logic.generateInfo(relative, request.params.type);
       response.set('Content-Type', 'application/json');
       response.end(JSON.stringify({
-        result: request.params.folder
+        result: contentPaths.toUrlFolder(relative)
       }));
     }
     catch (error) {
@@ -192,26 +220,25 @@ module.exports = {
   // copies a content folder and sets its title to the new folder name
   copy: (request, response, next) => {
     try {
-      const source = sanitizeContentFolder(request.params.folder);
-      const target = sanitizeContentFolder(request.body?.folder || `${source}-copia`);
-      if (!source || !target) {
-        throw new Error('folder name is empty');
-      }
+      const source = contentPaths.fromUrlFolder(request.params.folder);
+      const parent = contentPaths.parentOf(source);
+      const requestedName = request.body?.folder || `${contentPaths.basenameOf(source)}-copia`;
+      const target = contentPaths.joinParent(parent, requestedName);
       if (source === target) {
         throw new Error('choose a different folder name');
       }
-      const sourcePath = `content/${source}`;
-      const targetPath = `content/${target}`;
-      if (!fs.existsSync(`${sourcePath}/h5p.json`)) {
+      const sourcePath = contentPaths.contentDir(source);
+      const targetPath = contentPaths.contentDir(target);
+      if (!contentPaths.isActivityDir(sourcePath)) {
         throw new Error(`"content/${source}" was not found`);
       }
       if (fs.existsSync(targetPath)) {
         throw new Error(`"content/${target}" already exists`);
       }
       fs.cpSync(sourcePath, targetPath, { recursive: true });
-      writeContentTitle(target, target);
+      writeContentTitle(target, contentPaths.basenameOf(target));
       response.set('Content-Type', 'application/json');
-      response.end(JSON.stringify({ result: target }));
+      response.end(JSON.stringify({ result: contentPaths.toUrlFolder(target) }));
     }
     catch (error) {
       handleError(error, response);
@@ -220,28 +247,26 @@ module.exports = {
   // renames a content folder and its displayed title
   rename: (request, response, next) => {
     try {
-      const source = sanitizeContentFolder(request.params.folder);
-      const target = sanitizeContentFolder(request.body?.folder || '');
-      if (!source || !target) {
-        throw new Error('folder name is empty');
-      }
+      const source = contentPaths.fromUrlFolder(request.params.folder);
+      const parent = contentPaths.parentOf(source);
+      const target = contentPaths.joinParent(parent, request.body?.folder || '');
       if (source === target) {
         response.set('Content-Type', 'application/json');
-        response.end(JSON.stringify({ result: target }));
+        response.end(JSON.stringify({ result: contentPaths.toUrlFolder(target) }));
         return;
       }
-      const sourcePath = `content/${source}`;
-      const targetPath = `content/${target}`;
-      if (!fs.existsSync(`${sourcePath}/h5p.json`)) {
+      const sourcePath = contentPaths.contentDir(source);
+      const targetPath = contentPaths.contentDir(target);
+      if (!contentPaths.isActivityDir(sourcePath)) {
         throw new Error(`"content/${source}" was not found`);
       }
       if (fs.existsSync(targetPath)) {
         throw new Error(`"content/${target}" already exists`);
       }
       fs.renameSync(sourcePath, targetPath);
-      writeContentTitle(target, target);
+      writeContentTitle(target, contentPaths.basenameOf(target));
       response.set('Content-Type', 'application/json');
-      response.end(JSON.stringify({ result: target }));
+      response.end(JSON.stringify({ result: contentPaths.toUrlFolder(target) }));
     }
     catch (error) {
       handleError(error, response);
@@ -250,15 +275,87 @@ module.exports = {
   // deletes a content folder
   remove: (request, response, next) => {
     try {
-      fs.rmSync(`content/${request.params.folder}`, { recursive: true, force: true });
+      const relative = contentPaths.fromUrlFolder(request.params.folder);
+      const target = contentPaths.contentDir(relative);
+      if (!contentPaths.isActivityDir(target)) {
+        throw new Error(`"content/${relative}" was not found`);
+      }
+      fs.rmSync(target, { recursive: true, force: true });
       response.set('Content-Type', 'application/json');
-      response.end(JSON.stringify({result: `removed "content/${request.params.folder}"`}));
+      response.end(JSON.stringify({result: `removed "content/${relative}"`}));
     }
     catch (error) {
       handleError(error, response);
     }
   },
-  // lists content folders
+  // create space at content root
+  createSpace: (request, response, next) => {
+    try {
+      const name = contentPaths.sanitizeSegment(request.body?.name || request.body?.folder || '');
+      if (!name) {
+        throw new Error('space name is empty');
+      }
+      const target = contentPaths.contentDir(name);
+      if (fs.existsSync(target)) {
+        throw new Error(`"content/${name}" already exists`);
+      }
+      fs.mkdirSync(target, { recursive: true });
+      response.set('Content-Type', 'application/json');
+      response.end(JSON.stringify({ result: name }));
+    }
+    catch (error) {
+      handleError(error, response);
+    }
+  },
+  // rename space folder at content root
+  renameSpace: (request, response, next) => {
+    try {
+      const source = contentPaths.sanitizeSegment(request.params.space);
+      const target = contentPaths.sanitizeSegment(request.body?.name || request.body?.folder || '');
+      if (!source || !target) {
+        throw new Error('space name is empty');
+      }
+      const sourcePath = contentPaths.contentDir(source);
+      const targetPath = contentPaths.contentDir(target);
+      if (!contentPaths.isSpaceDir(sourcePath)) {
+        throw new Error(`space "${source}" was not found`);
+      }
+      if (source === target) {
+        response.set('Content-Type', 'application/json');
+        response.end(JSON.stringify({ result: target }));
+        return;
+      }
+      if (fs.existsSync(targetPath)) {
+        throw new Error(`"content/${target}" already exists`);
+      }
+      fs.renameSync(sourcePath, targetPath);
+      response.set('Content-Type', 'application/json');
+      response.end(JSON.stringify({ result: target }));
+    }
+    catch (error) {
+      handleError(error, response);
+    }
+  },
+  // delete empty space (no activities inside)
+  removeSpace: (request, response, next) => {
+    try {
+      const name = contentPaths.sanitizeSegment(request.params.space);
+      const target = contentPaths.contentDir(name);
+      if (!contentPaths.isSpaceDir(target)) {
+        throw new Error(`space "${name}" was not found`);
+      }
+      if (contentPaths.spaceHasActivities(name)) {
+        throw new Error('the space still has activities; delete or move them first');
+      }
+      fs.rmSync(target, { recursive: true, force: true });
+      response.set('Content-Type', 'application/json');
+      response.end(JSON.stringify({ result: `removed space "content/${name}"` }));
+    }
+    catch (error) {
+      handleError(error, response);
+    }
+  },
+  // lists content folders (and spaces at root)
   projects: async (request, response, next) => {
     try {
       const registry = await logic.getRegistry();
@@ -266,25 +363,35 @@ module.exports = {
       const page = parseInt(request.query.page) || 0;
       const start = page * limit;
       const end = start + limit;
+      const parent = resolveParentQuery(request);
+      if (parent) {
+        const spaceDir = contentPaths.contentDir(parent);
+        if (!fs.existsSync(spaceDir) || !contentPaths.isSpaceDir(spaceDir)) {
+          throw new Error(`space "${parent}" was not found`);
+        }
+      }
       const libraryDirs = await logic.parseLibraryFolders();
       const output = {
         list: [],
+        spaces: parent ? [] : contentPaths.listSpaces(),
+        parent,
         total: 0
       }
-      const dirs = fs.readdirSync('content');
+      if (!fs.existsSync(contentPaths.CONTENT_ROOT)) {
+        fs.mkdirSync(contentPaths.CONTENT_ROOT, { recursive: true });
+      }
       const list = [];
-      for (let item of dirs) {
-        if (!fs.existsSync(`content/${item}/h5p.json`)) {
-          continue;
-        }
-        const info = JSON.parse(fs.readFileSync(`content/${item}/h5p.json`, 'utf-8'));
+      for (let item of contentPaths.listActivities(parent)) {
+        const infoFile = `${contentPaths.contentDir(item)}/h5p.json`;
+        const info = JSON.parse(fs.readFileSync(infoFile, 'utf-8'));
         if (!registry.reversed[info.mainLibrary]) {
           continue;
         }
         list.push({
           id: info.mainLibrary,
           title: info.title,
-          folder: item
+          folder: item,
+          folderUrl: contentPaths.toUrlFolder(item)
         });
       }
       list.sort((a, b) => a.title.localeCompare(b.title, undefined, {
@@ -329,12 +436,14 @@ module.exports = {
   // renders view & edit modes on the same page
   splitView: async (request, response, next) => {
     try {
+      normalizeFolderParam(request);
+      const folderUrl = contentPaths.toUrlFolder(request.params.folder);
       const splitView_html = fs.readFileSync(`${require.main.path}/${config.folders.assets}/templates/splitView.html`, 'utf-8');
       const labels = await getLangLabels();
       let input = {
         assets: config.folders.assets,
-        viewFrameSRC: `/view/${request.params.library}/${request.params.folder}?simple=1`,
-        editFrameSRC: `/edit/${request.params.library}/${request.params.folder}?simple=1`
+        viewFrameSRC: `/view/${request.params.library}/${folderUrl}?simple=1`,
+        editFrameSRC: `/edit/${request.params.library}/${folderUrl}?simple=1`
       }
       input = {...input, ...labels};
       response.set('Content-Type', 'text/html');
@@ -347,6 +456,7 @@ module.exports = {
   // editor file upload
   uploadFile: (request, response, next) => {
     try {
+      normalizeFolderParam(request);
       const form = JSON.parse(request.body.field);
       const targetFolder = `${logic.contentRoot(request.params.folder)}/${form.type}s`;
       if (!fs.existsSync(targetFolder)) {
@@ -387,6 +497,8 @@ module.exports = {
   // updates content.json file with data from content type editor form
   saveContent: async (request, response, next) => {
     try {
+      normalizeFolderParam(request);
+      const folderUrl = contentPaths.toUrlFolder(request.params.folder);
       const input = JSON.parse(request.body.parameters);
       const contentFile = logic.contentJsonPath(request.params.folder);
       const currentParams = fs.readFileSync(contentFile, 'utf-8');
@@ -439,7 +551,7 @@ module.exports = {
       if (currentParams !== '{}' && currentParams !== newParams) {
         resetContentUserData(request.params.folder); // content changed; reset user data
       }
-      response.redirect(`/${simple ? 'edit' : 'view'}/${request.params.library}/${request.params.folder}${simple ? '?simple=1' : ''}`);
+      response.redirect(`/${simple ? 'edit' : 'view'}/${request.params.library}/${folderUrl}${simple ? '?simple=1' : ''}`);
     }
     catch (error) {
       handleError(error, response);
@@ -489,9 +601,14 @@ module.exports = {
   // html page that initializes and renders h5p content type editors
   edit: async (request, response, next) => {
     try {
+      normalizeFolderParam(request);
       const baseUrl = config.api;
       const library = request.params.library;
       const folder = request.params.folder;
+      const folderUrl = contentPaths.toUrlFolder(folder);
+      const dashboardHref = contentPaths.parentOf(folder)
+        ? `/dashboard/${contentPaths.parentOf(folder)}`
+        : '/dashboard';
       const registry = await logic.getRegistry();
       const libraryDirs = await logic.parseLibraryFolders();
       if (!await verifySetup(library, response)) {
@@ -540,7 +657,7 @@ module.exports = {
           break;
         }
       }
-      manageSession(request.params.folder, {
+      manageSession(folder, {
         language: request.query?.language,
         name: request.query?.session
       }, true);
@@ -556,12 +673,13 @@ module.exports = {
         libraries: config.folders.libraries,
         title: info.title,
         baseUrl,
-        ajaxPath: `${baseUrl}/edit/${library}/${folder}/`,
+        ajaxPath: `${baseUrl}/edit/${library}/${folderUrl}/`,
         filesPath: `${baseUrl}/${logic.contentRoot(folder)}`,
         copyrightSemantics,
         metadataSemantics,
         library,
-        folder,
+        folder: folderUrl,
+        dashboardHref,
         preloadedCss: preloadedCss.join(',\n'),
         preloadedJs: preloadedJs.join(',\n'),
         l10n: JSON.stringify(l10n),
@@ -587,9 +705,14 @@ module.exports = {
   // html page that initializes and renders h5p content types
   view: async (request, response, next) => {
     try {
+      normalizeFolderParam(request);
       const baseUrl = config.api;
       const library = request.params.library;
       const folder = request.params.folder;
+      const folderUrl = contentPaths.toUrlFolder(folder);
+      const dashboardHref = contentPaths.parentOf(folder)
+        ? `/dashboard/${contentPaths.parentOf(folder)}`
+        : '/dashboard';
       const registry = await logic.getRegistry();
       const libraryDirs = await logic.parseLibraryFolders();
       if (!await verifySetup(library, response)) {
@@ -655,7 +778,8 @@ module.exports = {
         baseUrl,
         contentBase: `${baseUrl}/${logic.contentRoot(folder)}`,
         library,
-        folder,
+        folder: folderUrl,
+        dashboardHref,
         session: session.name,
         sessions: JSON.stringify(sessions),
         machineName,
@@ -913,14 +1037,26 @@ const ajaxLibraries = async (options) => {
   }
   return output;
 }
-const sanitizeContentFolder = (name) => {
-  return String(name ?? '')
-    .replaceAll(/[^a-zA-Z0-9 _-]/g, '')
-    .replaceAll(' ', '-');
-}
+const normalizeFolderParam = (request) => {
+  if (request.params?.folder) {
+    request.params.folder = contentPaths.fromUrlFolder(request.params.folder);
+  }
+};
+
+const resolveParentQuery = (request) => {
+  const raw = request.query?.parent;
+  if (raw === undefined || raw === null || raw === '') {
+    return '';
+  }
+  const parent = contentPaths.sanitizeSegment(String(raw));
+  if (!parent || parent !== String(raw)) {
+    throw new Error('invalid parent space');
+  }
+  return parent;
+};
 
 const writeContentTitle = (folder, title) => {
-  const infoFile = `content/${folder}/h5p.json`;
+  const infoFile = `${contentPaths.contentDir(folder)}/h5p.json`;
   const info = JSON.parse(fs.readFileSync(infoFile, 'utf-8'));
   info.title = title;
   fs.writeFileSync(infoFile, JSON.stringify(info));

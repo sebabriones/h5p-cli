@@ -10,7 +10,11 @@ app.use(express.urlencoded({
 app.get('/', (req, res) => res.redirect('/dashboard'));
 app.get('/favicon.ico', api.favicon);
 app.get('/dashboard', api.dashboard);
+app.get('/dashboard/:space', api.dashboard);
 app.get('/projects', api.projects);
+app.post('/spaces', api.createSpace);
+app.post('/spaces/:space/rename', api.renameSpace);
+app.post('/spaces/:space/remove', api.removeSpace);
 app.get('/runnable', api.contentTypes);
 app.get('/export/:library/:folder', api.export);
 app.post('/import/:folder', multer.single('file'), api.import);

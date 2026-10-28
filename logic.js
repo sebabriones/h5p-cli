@@ -123,8 +123,11 @@ module.exports = {
   },
   // imports content type from zip archive file in the .h5p format
   import: (folder, archive) => {
-    const target = `${config.folders.temp}/${folder}`;
+    const tempName = String(folder).replaceAll('/', '--');
+    const target = `${config.folders.temp}/${tempName}`;
     const dest = `content/${folder}`;
+    fs.rmSync(target, { recursive: true, force: true });
+    fs.mkdirSync(target, { recursive: true });
     new admZip(archive).extractAllTo(target);
     fs.rmSync(dest, { recursive: true, force: true });
     fs.mkdirSync(dest, { recursive: true });
@@ -144,9 +147,10 @@ module.exports = {
     const libraryDirs = await module.exports.parseLibraryFolders();
     const libFolder = libraryDirs[registry.regular[library].id];
     const source = `content/${folder}`;
-    const target = `${config.folders.temp}/${folder}`;
+    const tempName = String(folder).replaceAll('/', '--');
+    const target = `${config.folders.temp}/${tempName}`;
     fs.rmSync(target, { recursive: true, force: true });
-    fs.mkdirSync(target);
+    fs.mkdirSync(target, { recursive: true });
     const nested = `${source}/content/content.json`;
     if (fs.existsSync(nested)) {
       fs.copyFileSync(`${source}/h5p.json`, `${target}/h5p.json`);

@@ -20,6 +20,11 @@ content/<nombre>/content/audios/…
 - El `.h5p` descargado lleva `h5p.json` en la raíz, la carpeta `content/` al lado y las librerías de reproductor usadas (principal + embeds de `content.json`), como el CLI base. `h5p.json` lista esas dependencias en `preloadedDependencies`.
 - El nombre de la actividad conserva letras, números, guion y guion bajo. `prueba_1` no pasa a `prueba1`.
 - No se crea la carpeta `sessions`.
+- **Espacios** (organización en el dashboard):
+  - Sin espacio: las actividades siguen en `content/<actividad>/` y se listan en `/dashboard` (como antes).
+  - Con espacio: `content/<espacio>/<actividad>/`. Al entrar en `/dashboard/<espacio>`, **New** e **Import** crean ahí.
+  - Un espacio es una carpeta sin `h5p.json`. Solo se puede borrar si no tiene actividades.
+  - Las actividades que ya existían en la raíz no se mueven solas.
 
 Las actividades creadas con el CLI anterior, con `content.json` junto a `h5p.json`, siguen abriendo.
 
@@ -35,7 +40,7 @@ node h5p.js server
 
 `npm install` baja las dependencias de Node. `core` se ejecuta una sola vez: clona `h5p-editor-php-library` y `h5p-php-library`, y prepara `h5p-math-display`. Hay que tener Git disponible y salida a internet.
 
-El panel queda en `http://localhost:8080/dashboard`.
+El panel queda en `http://localhost:8080/dashboard`. Un espacio concreto: `http://localhost:8080/dashboard/ingles`.
 
 Para usar otro puerto:
 
