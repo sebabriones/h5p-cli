@@ -32,6 +32,9 @@
       content: 'content',
       pagination: 'pagination',
       languages: 'languages',
+      spaceItemTemplate: 'spaceItemTemplate',
+      contentItemTemplate: 'contentItemTemplate',
+      paginationLinkTemplate: 'paginationLinkTemplate',
       modal: 'dashModal',
       modalTitle: 'dashModalTitle',
       modalHint: 'dashModalHint',
@@ -95,62 +98,67 @@
       </div>
     </div>
   </div>
-  <div class="holder">
-    <nav class="breadcrumb" id="breadcrumb" aria-label="Ruta">
-      <a href="/dashboard">{breadcrumbRootLabel}</a>
-    </nav>
-    <div id="spacesSection" class="spaces-section">
+  <div class="dashboard-layout">
+    <aside id="spacesSection" class="spaces-sidebar" aria-label="Navegación de secciones">
       <h2 class="section-title" id="sectionsTitle">{sectionsTitle}</h2>
-      <div class="spaces" id="spaces">
-        <div class="space-item">
-          <a class="space-link" href="{href}">{name}</a>
-          <div class="space-actions">
-            <div class="button transition move tooltip" onclick="runner.moveSpace('{folderUrl}', '{name}')">
-              <span class="tooltiptext">Mover</span>
-            </div>
-            <div class="button transition rename tooltip" onclick="runner.renameSpace('{folderUrl}', '{name}')">
-              <span class="tooltiptext">{lang_Rename}</span>
-            </div>
-            <div class="button transition delete tooltip" onclick="runner.removeSpace('{folderUrl}', '{name}')">
-              <span class="tooltiptext">{lang_Delete}</span>
-            </div>
-          </div>
-        </div>
-      </div>
-    </div>
-    <h2 class="section-title">Actividades</h2>
-    <div class="content" id="content">
-      <div class="item">
-        <div class="itemIcon"><img src="{icon}" /></div>
-        <div class="itemTitle"><a href="view/{library}/{folderUrl}">{title}</a>
-          <div class="itemPath">{library}</div>
-        </div>
-        <div class="itemLinks">
-          <a class="view transition tooltip" href="view/{library}/{folderUrl}">
-            <span class="tooltiptext">{lang_View}</span>
-          </a>
-          <a class="edit transition tooltip" href="edit/{library}/{folderUrl}">
-            <span class="tooltiptext">{lang_Edit}</span>
-          </a>
-          <div class="button transition copy tooltip" onclick="runner.copy('{folderUrl}')">
-            <span class="tooltiptext">{lang_Copy}</span>
-          </div>
-          <div class="button transition move tooltip" onclick="runner.move('{folderUrl}')">
-            <span class="tooltiptext">Mover</span>
-          </div>
-          <div class="button transition rename tooltip" onclick="runner.rename('{folderUrl}', '{folderBase}')">
-            <span class="tooltiptext">{lang_Rename}</span>
-          </div>
-          <div class="button transition delete tooltip" onclick="runner.remove('{folderUrl}')">
-            <span class="tooltiptext">{lang_Delete}</span>
-          </div>
-        </div>
-      </div>
-    </div>
-    <div class="pagination" id="pagination">
-      <div class="button{selected}" onclick="{onclick}">{page}</div>
+      <div class="spaces" id="spaces"></div>
+    </aside>
+    <div class="holder">
+      <nav class="breadcrumb" id="breadcrumb" aria-label="Ruta">
+        <a href="/dashboard">{breadcrumbRootLabel}</a>
+      </nav>
+      <h2 class="section-title">Actividades</h2>
+      <div class="content" id="content"></div>
+      <div class="pagination" id="pagination"></div>
     </div>
   </div>
+  <template id="spaceItemTemplate">
+    <div class="space-item">
+      <a class="space-link" href="{href}">{name}</a>
+      <div class="space-actions">
+        <div class="button transition move tooltip" onclick="runner.moveSpace('{folderUrl}', '{name}')">
+          <span class="tooltiptext">Mover</span>
+        </div>
+        <div class="button transition rename tooltip" onclick="runner.renameSpace('{folderUrl}', '{name}')">
+          <span class="tooltiptext">{lang_Rename}</span>
+        </div>
+        <div class="button transition delete tooltip" onclick="runner.removeSpace('{folderUrl}', '{name}')">
+          <span class="tooltiptext">{lang_Delete}</span>
+        </div>
+      </div>
+    </div>
+  </template>
+  <template id="contentItemTemplate">
+    <div class="item">
+      <div class="itemIcon"><img src="{icon}" /></div>
+      <div class="itemTitle"><a href="/view/{library}/{folderUrl}">{title}</a>
+        <div class="itemPath">{library}</div>
+      </div>
+      <div class="itemLinks">
+        <a class="view transition tooltip" href="/view/{library}/{folderUrl}">
+          <span class="tooltiptext">{lang_View}</span>
+        </a>
+        <a class="edit transition tooltip" href="/edit/{library}/{folderUrl}">
+          <span class="tooltiptext">{lang_Edit}</span>
+        </a>
+        <div class="button transition copy tooltip" onclick="runner.copy('{folderUrl}')">
+          <span class="tooltiptext">{lang_Copy}</span>
+        </div>
+        <div class="button transition move tooltip" onclick="runner.move('{folderUrl}')">
+          <span class="tooltiptext">Mover</span>
+        </div>
+        <div class="button transition rename tooltip" onclick="runner.rename('{folderUrl}', '{folderBase}')">
+          <span class="tooltiptext">{lang_Rename}</span>
+        </div>
+        <div class="button transition delete tooltip" onclick="runner.remove('{folderUrl}')">
+          <span class="tooltiptext">{lang_Delete}</span>
+        </div>
+      </div>
+    </div>
+  </template>
+  <template id="paginationLinkTemplate">
+    <div class="button{selected}" onclick="{onclick}">{page}</div>
+  </template>
   <div id="dashModal" class="dash-modal hidden" aria-hidden="true">
     <div class="dash-modal-backdrop" data-modal-dismiss="1"></div>
     <div class="dash-modal-dialog" role="dialog" aria-modal="true" aria-labelledby="dashModalTitle">

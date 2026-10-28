@@ -34,11 +34,22 @@ module.exports = {
       let space = '';
       const rawPath = request.params.spacePath || request.params.space || request.params[0] || '';
       if (rawPath) {
-        space = contentPaths.fromDashboardPath(rawPath);
-        const spaceDir = contentPaths.contentDir(space);
-        if (!fs.existsSync(spaceDir) || !contentPaths.isSpaceDir(spaceDir)) {
-          throw new Error(`sección "${space}" no encontrada`);
+        let parsed;
+        try {
+          parsed = contentPaths.fromDashboardPath(rawPath);
         }
+        catch {
+          // Rutas que no son secciones (p. ej. assets relativos mal resueltos): seguir al static/404
+          return next();
+        }
+        const spaceDir = contentPaths.contentDir(parsed);
+        if (!fs.existsSync(spaceDir) || !contentPaths.isSpaceDir(spaceDir)) {
+          response.status(404);
+          response.set('Content-Type', 'text/plain; charset=utf-8');
+          response.end(`sección "${parsed}" no encontrada`);
+          return;
+        }
+        space = parsed;
       }
       const html = fs.readFileSync(`${require.main.path}/${config.folders.assets}/templates/dashboard.html`, 'utf-8');
       const labels = await getLangLabels();
@@ -523,17 +534,17 @@ module.exports = {
         entry = (await logic.computeDependencies(library, 'view', null, libraryDirs[registry.regular[library].id]))[library];
         let icon = '/assets/icon.svg';
         if (entry.version) {
-          const libraryFolder = `${config.folders.libraries}/${libraryDirs[list[i].id]}`;
+          const libraryFolder = `${config.folders.libraries}/${libraryDirs[list[i].id]}`.replaceAll('\\', '/');
           const iconFile = `${libraryFolder}/icon.svg`;
           if (fs.existsSync(libraryFolder)) {
             if (fs.existsSync(iconFile)) {
-              icon = iconFile;
+              icon = `/${iconFile}`;
             }
             else {
               const files = fs.readdirSync(libraryFolder);
               for (let item of files) {
                 if (item.split('.')?.[1] == 'svg') {
-                  icon = `${libraryFolder}/${item}`;
+                  icon = `/${libraryFolder}/${item}`;
                   break;
                 }
               }

@@ -62,9 +62,9 @@ function dashboard(options) {
       modalBody = document.getElementById(options.ids.modalBody);
       modalCancel = document.getElementById(options.ids.modalCancel);
       modalOk = document.getElementById(options.ids.modalOk);
-      entry = content.innerHTML;
-      spaceEntry = spaces.innerHTML;
-      link = pagination.innerHTML;
+      entry = document.getElementById(options.ids.contentItemTemplate).innerHTML;
+      spaceEntry = document.getElementById(options.ids.spaceItemTemplate).innerHTML;
+      link = document.getElementById(options.ids.paginationLinkTemplate).innerHTML;
       option = contentTypes.innerHTML;
       if (newSpaceButtonLabel) {
         newSpaceButtonLabel.innerText = options.sectionButtonLabel || (options.space ? 'Sub-sección' : 'Sección');
