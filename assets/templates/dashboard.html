@@ -17,8 +17,10 @@
       importContentButton: 'importContentButton',
       importContent: 'importContent',
       newSpaceButton: 'newSpaceButton',
+      newSpaceButtonLabel: 'newSpaceButtonLabel',
       newSpace: 'newSpace',
       spaceName: 'spaceName',
+      sectionsTitle: 'sectionsTitle',
       contentTypes: 'contentTypes',
       createFolder: 'createFolder',
       importFolder: 'importFolder',
@@ -35,7 +37,9 @@
       hidden: 'hidden'
     },
     language: "{language}",
-    languages: {languages}
+    languages: {languages},
+    sectionButtonLabel: "{sectionButtonLabel}",
+    sectionsTitle: "{sectionsTitle}"
   });
   runner.init();
 </script>
@@ -52,7 +56,7 @@
           <span class="button-label">{lang_import}</span>
         </div>
         <div class="button new-space" id="newSpaceButton" onclick="runner.toggleNewSpace()">
-          <span class="button-label">Espacio</span>
+          <span class="button-label" id="newSpaceButtonLabel">{sectionButtonLabel}</span>
         </div>
         <div class="languages">
           {lang_language}
@@ -78,8 +82,8 @@
         </div>
         <div id="newSpace" class="hidden inline">
           <div class="center-content">
-            <input type="text" class="input" id="spaceName" placeholder="Nombre del espacio">
-            <div class="button" onclick="runner.createSpace()">Crear espacio</div>
+            <input type="text" class="input" id="spaceName" placeholder="Nombre">
+            <div class="button" onclick="runner.createSpace()">Crear</div>
           </div>
         </div>
       </div>
@@ -90,15 +94,15 @@
       <a href="/dashboard">{breadcrumbRootLabel}</a>
     </nav>
     <div id="spacesSection" class="spaces-section">
-      <h2 class="section-title">Espacios</h2>
+      <h2 class="section-title" id="sectionsTitle">{sectionsTitle}</h2>
       <div class="spaces" id="spaces">
         <div class="space-item">
-          <a class="space-link" href="/dashboard/{folder}">{name}</a>
+          <a class="space-link" href="{href}">{name}</a>
           <div class="space-actions">
-            <div class="button transition rename tooltip" onclick="runner.renameSpace('{folder}')">
+            <div class="button transition rename tooltip" onclick="runner.renameSpace('{folderUrl}', '{name}')">
               <span class="tooltiptext">{lang_Rename}</span>
             </div>
-            <div class="button transition delete tooltip" onclick="runner.removeSpace('{folder}')">
+            <div class="button transition delete tooltip" onclick="runner.removeSpace('{folderUrl}', '{name}')">
               <span class="tooltiptext">{lang_Delete}</span>
             </div>
           </div>

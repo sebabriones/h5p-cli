@@ -24,7 +24,7 @@ module.exports = {
       handleError(error, response);
     }
   },
-  // renders dashboard (root or /dashboard/:space)
+  // renders dashboard (root or /dashboard/espacio[/seccion...])
   dashboard: async (request, response, next) => {
     try {
       manageSession(null, {
@@ -32,11 +32,9 @@ module.exports = {
         name: request.query?.session
       });
       let space = '';
-      if (request.params.space) {
-        space = contentPaths.sanitizeSegment(request.params.space);
-        if (!space || space !== request.params.space) {
-          throw new Error('invalid space name');
-        }
+      const rawPath = request.params.spacePath || request.params.space || request.params[0] || '';
+      if (rawPath) {
+        space = contentPaths.fromDashboardPath(rawPath);
         const spaceDir = contentPaths.contentDir(space);
         if (!fs.existsSync(spaceDir) || !contentPaths.isSpaceDir(spaceDir)) {
           throw new Error(`space "${space}" was not found`);
@@ -58,8 +56,10 @@ module.exports = {
         languages: JSON.stringify(languages),
         space,
         spaceJson: JSON.stringify(space),
-        breadcrumbRootLabel: labels.lang_dashboard || 'Dashboard',
-        breadcrumbSpaceLabel: space || ''
+        spaceLabel: space ? contentPaths.basenameOf(space) : '',
+        sectionButtonLabel: space ? 'Sección' : 'Espacio',
+        sectionsTitle: space ? 'Secciones' : 'Espacios',
+        breadcrumbRootLabel: labels.lang_dashboard || 'Dashboard'
       }
       input = {...input, ...labels};
       response.set('Content-Type', 'text/html');
@@ -288,33 +288,37 @@ module.exports = {
       handleError(error, response);
     }
   },
-  // create space at content root
+  // create space or subsection under optional parent
   createSpace: (request, response, next) => {
     try {
-      const name = contentPaths.sanitizeSegment(request.body?.name || request.body?.folder || '');
-      if (!name) {
-        throw new Error('space name is empty');
+      const parentRaw = request.body?.parent || '';
+      const parent = parentRaw ? contentPaths.assertSafeRelative(String(parentRaw)) : '';
+      if (parent) {
+        const parentDir = contentPaths.contentDir(parent);
+        if (!fs.existsSync(parentDir) || !contentPaths.isSpaceDir(parentDir)) {
+          throw new Error(`space "${parent}" was not found`);
+        }
       }
-      const target = contentPaths.contentDir(name);
+      const name = contentPaths.sanitizeSegment(request.body?.name || request.body?.folder || '');
+      const relative = contentPaths.joinParent(parent, name);
+      const target = contentPaths.contentDir(relative);
       if (fs.existsSync(target)) {
-        throw new Error(`"content/${name}" already exists`);
+        throw new Error(`"content/${relative}" already exists`);
       }
       fs.mkdirSync(target, { recursive: true });
       response.set('Content-Type', 'application/json');
-      response.end(JSON.stringify({ result: name }));
+      response.end(JSON.stringify({ result: relative, href: contentPaths.toDashboardHref(relative) }));
     }
     catch (error) {
       handleError(error, response);
     }
   },
-  // rename space folder at content root
+  // rename space/section (keeps parent path)
   renameSpace: (request, response, next) => {
     try {
-      const source = contentPaths.sanitizeSegment(request.params.space);
-      const target = contentPaths.sanitizeSegment(request.body?.name || request.body?.folder || '');
-      if (!source || !target) {
-        throw new Error('space name is empty');
-      }
+      const source = contentPaths.fromUrlFolder(request.params.space);
+      const parent = contentPaths.parentOf(source);
+      const target = contentPaths.joinParent(parent, request.body?.name || request.body?.folder || '');
       const sourcePath = contentPaths.contentDir(source);
       const targetPath = contentPaths.contentDir(target);
       if (!contentPaths.isSpaceDir(sourcePath)) {
@@ -322,7 +326,7 @@ module.exports = {
       }
       if (source === target) {
         response.set('Content-Type', 'application/json');
-        response.end(JSON.stringify({ result: target }));
+        response.end(JSON.stringify({ result: target, href: contentPaths.toDashboardHref(target) }));
         return;
       }
       if (fs.existsSync(targetPath)) {
@@ -330,22 +334,22 @@ module.exports = {
       }
       fs.renameSync(sourcePath, targetPath);
       response.set('Content-Type', 'application/json');
-      response.end(JSON.stringify({ result: target }));
+      response.end(JSON.stringify({ result: target, href: contentPaths.toDashboardHref(target) }));
     }
     catch (error) {
       handleError(error, response);
     }
   },
-  // delete empty space (no activities inside)
+  // delete empty space/section (no activities or child sections)
   removeSpace: (request, response, next) => {
     try {
-      const name = contentPaths.sanitizeSegment(request.params.space);
+      const name = contentPaths.fromUrlFolder(request.params.space);
       const target = contentPaths.contentDir(name);
       if (!contentPaths.isSpaceDir(target)) {
         throw new Error(`space "${name}" was not found`);
       }
-      if (contentPaths.spaceHasActivities(name)) {
-        throw new Error('the space still has activities; delete or move them first');
+      if (contentPaths.spaceHasChildren(name)) {
+        throw new Error('the space still has sections or activities; delete them first');
       }
       fs.rmSync(target, { recursive: true, force: true });
       response.set('Content-Type', 'application/json');
@@ -355,7 +359,7 @@ module.exports = {
       handleError(error, response);
     }
   },
-  // lists content folders (and spaces at root)
+  // lists content folders and child spaces/sections for current parent
   projects: async (request, response, next) => {
     try {
       const registry = await logic.getRegistry();
@@ -373,8 +377,9 @@ module.exports = {
       const libraryDirs = await logic.parseLibraryFolders();
       const output = {
         list: [],
-        spaces: parent ? [] : contentPaths.listSpaces(),
+        spaces: contentPaths.listSpaces(parent),
         parent,
+        breadcrumbs: contentPaths.breadcrumbParts(parent),
         total: 0
       }
       if (!fs.existsSync(contentPaths.CONTENT_ROOT)) {
@@ -1048,11 +1053,11 @@ const resolveParentQuery = (request) => {
   if (raw === undefined || raw === null || raw === '') {
     return '';
   }
-  const parent = contentPaths.sanitizeSegment(String(raw));
-  if (!parent || parent !== String(raw)) {
-    throw new Error('invalid parent space');
+  const value = String(raw);
+  if (value.includes(contentPaths.URL_SEP)) {
+    return contentPaths.fromUrlFolder(value);
   }
-  return parent;
+  return contentPaths.assertSafeRelative(value.replaceAll('\\', '/'));
 };
 
 const writeContentTitle = (folder, title) => {

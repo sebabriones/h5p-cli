@@ -10,7 +10,10 @@ app.use(express.urlencoded({
 app.get('/', (req, res) => res.redirect('/dashboard'));
 app.get('/favicon.ico', api.favicon);
 app.get('/dashboard', api.dashboard);
-app.get('/dashboard/:space', api.dashboard);
+app.get('/dashboard/*', (req, res, next) => {
+  req.params.spacePath = req.params[0];
+  return api.dashboard(req, res, next);
+});
 app.get('/projects', api.projects);
 app.post('/spaces', api.createSpace);
 app.post('/spaces/:space/rename', api.renameSpace);

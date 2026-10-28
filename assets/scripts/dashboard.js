@@ -4,8 +4,10 @@ function dashboard(options) {
   let importContentButton;
   let importContent;
   let newSpaceButton;
+  let newSpaceButtonLabel;
   let newSpace;
   let spaceName;
+  let sectionsTitle;
   let contentTypes;
   let createFolder;
   let importFolder;
@@ -31,8 +33,10 @@ function dashboard(options) {
       importContentButton = document.getElementById(options.ids.importContentButton);
       importContent = document.getElementById(options.ids.importContent);
       newSpaceButton = document.getElementById(options.ids.newSpaceButton);
+      newSpaceButtonLabel = document.getElementById(options.ids.newSpaceButtonLabel);
       newSpace = document.getElementById(options.ids.newSpace);
       spaceName = document.getElementById(options.ids.spaceName);
+      sectionsTitle = document.getElementById(options.ids.sectionsTitle);
       contentTypes = document.getElementById(options.ids.contentTypes);
       createFolder = document.getElementById(options.ids.createFolder);
       importFolder = document.getElementById(options.ids.importFolder);
@@ -48,8 +52,12 @@ function dashboard(options) {
       spaceEntry = spaces.innerHTML;
       link = pagination.innerHTML;
       option = contentTypes.innerHTML;
-      this.renderBreadcrumb();
-      this.updateSpaceUi();
+      if (newSpaceButtonLabel) {
+        newSpaceButtonLabel.innerText = options.sectionButtonLabel || (options.space ? 'Sección' : 'Espacio');
+      }
+      if (sectionsTitle) {
+        sectionsTitle.innerText = options.sectionsTitle || (options.space ? 'Secciones' : 'Espacios');
+      }
       this.getPage();
       this.getContentTypes();
       this.setLanguages();
@@ -68,25 +76,22 @@ function dashboard(options) {
     }
     return url.includes('?') ? `${url}&${query}` : `${url}?${query}`;
   }
-  this.renderBreadcrumb = () => {
+  this.renderBreadcrumb = (crumbs = []) => {
     if (!breadcrumb) {
       return;
     }
     let html = `<a href="/dashboard">Dashboard</a>`;
-    if (options.space) {
-      html += ` <span class="breadcrumb-sep">/</span> <span class="breadcrumb-current">${options.space}</span>`;
+    for (let i = 0; i < crumbs.length; i++) {
+      const crumb = crumbs[i];
+      html += ` <span class="breadcrumb-sep">/</span> `;
+      if (i === crumbs.length - 1) {
+        html += `<span class="breadcrumb-current">${crumb.name}</span>`;
+      }
+      else {
+        html += `<a href="${crumb.href}">${crumb.name}</a>`;
+      }
     }
     breadcrumb.innerHTML = html;
-  }
-  this.updateSpaceUi = () => {
-    if (options.space) {
-      newSpaceButton.classList.add(options.classes.hidden);
-      spacesSection.classList.add(options.classes.hidden);
-    }
-    else {
-      newSpaceButton.classList.remove(options.classes.hidden);
-      spacesSection.classList.remove(options.classes.hidden);
-    }
   }
   this.basename = (folderUrl) => {
     const parts = String(folderUrl || '').split('::');
@@ -103,18 +108,22 @@ function dashboard(options) {
       if (result.error) {
         throw new Error(result.error);
       }
+      this.renderBreadcrumb(result.breadcrumbs || []);
       let contentHTML = '';
       let spacesHTML = '';
       let paginationHTML = '';
-      if (!options.space) {
-        for (let item of (result.spaces || [])) {
-          spacesHTML += this.fromTemplate(spaceEntry, {
-            name: item.name,
-            folder: item.folder
-          });
-        }
-        spaces.innerHTML = spacesHTML || '<p class="empty-hint">No hay espacios. Crea uno para organizar actividades.</p>';
+      for (let item of (result.spaces || [])) {
+        spacesHTML += this.fromTemplate(spaceEntry, {
+          name: item.name,
+          folder: item.folder,
+          folderUrl: item.folderUrl || item.folder,
+          href: item.href || `/dashboard/${item.folder}`
+        });
       }
+      const emptySpaces = options.space
+        ? 'No hay secciones en este nivel.'
+        : 'No hay espacios. Crea uno para organizar actividades.';
+      spaces.innerHTML = spacesHTML || `<p class="empty-hint">${emptySpaces}</p>`;
       for (let item of result.list) {
         contentHTML += this.fromTemplate(entry, {
           title: item.title,
@@ -200,31 +209,31 @@ function dashboard(options) {
   this.createSpace = async () => {
     try {
       if (!spaceName.value) {
-        throw new Error('introduce el nombre del espacio');
+        throw new Error('introduce el nombre');
       }
       this.showStatus('...');
       const output = await (await fetch(`${options.api}/spaces`, {
         method: 'post',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ name: spaceName.value })
+        body: JSON.stringify({ name: spaceName.value, parent: options.space || '' })
       })).json();
       if (output.error) {
         throw new Error(output.error);
       }
-      window.location.href = `/dashboard/${output.result}`;
+      window.location.href = output.href || `/dashboard/${output.result}`;
     }
     catch (error) {
       this.handleError(error);
     }
   }
-  this.renameSpace = async (space) => {
+  this.renameSpace = async (spaceUrl, displayName) => {
     try {
-      const name = window.prompt('Nuevo nombre del espacio. Los espacios pasan a guiones.', space);
-      if (!name || name === space) {
+      const name = window.prompt('Nuevo nombre. Los espacios pasan a guiones.', displayName || this.basename(spaceUrl));
+      if (!name || name === (displayName || this.basename(spaceUrl))) {
         return;
       }
       this.showStatus('...');
-      const output = await (await fetch(`${options.api}/spaces/${encodeURIComponent(space)}/rename`, {
+      const output = await (await fetch(`${options.api}/spaces/${encodeURIComponent(spaceUrl)}/rename`, {
         method: 'post',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ name })
@@ -232,20 +241,21 @@ function dashboard(options) {
       if (output.error) {
         throw new Error(output.error);
       }
-      this.showStatus(`espacio renombrado a content/${output.result}`);
+      this.showStatus(`renombrado a content/${output.result}`);
       this.getPage(currentPage);
     }
     catch (error) {
       this.handleError(error);
     }
   }
-  this.removeSpace = async (space) => {
+  this.removeSpace = async (spaceUrl, displayName) => {
     try {
-      if (!window.confirm(`¿Eliminar el espacio vacío "content/${space}"?`)) {
+      const label = displayName || this.basename(spaceUrl);
+      if (!window.confirm(`¿Eliminar "${label}"? Debe estar vacío (sin secciones ni actividades).`)) {
         return;
       }
       this.showStatus('...');
-      const output = await (await fetch(`${options.api}/spaces/${encodeURIComponent(space)}/remove`, { method: 'post' })).json();
+      const output = await (await fetch(`${options.api}/spaces/${encodeURIComponent(spaceUrl)}/remove`, { method: 'post' })).json();
       if (output.error) {
         throw new Error(output.error);
       }

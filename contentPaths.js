@@ -5,10 +5,10 @@ const CONTENT_ROOT = 'content';
 const URL_SEP = '::';
 
 /**
- * Fase 0 — contrato:
+ * Contrato:
  * - Actividad: carpeta con h5p.json
- * - Espacio (fase 1): carpeta bajo content/ sin h5p.json (un solo nivel)
- * - Raíz: actividades y espacios en content/
+ * - Espacio / subsección: carpeta sin h5p.json (anidable)
+ * - Raíz: content/
  */
 
 const sanitizeSegment = (name) => {
@@ -36,7 +36,7 @@ const assertSafeRelative = (relative) => {
   return parts.join('/');
 };
 
-/** Disk path relative to cwd, e.g. content/ingles/act */
+/** Disk path relative to cwd, e.g. content/ingles/unidad-1 */
 const contentDir = (relative = '') => {
   if (!relative) {
     return CONTENT_ROOT;
@@ -55,7 +55,7 @@ const isSpaceDir = (absoluteOrRelativeFsPath) => {
   return !isActivityDir(absoluteOrRelativeFsPath);
 };
 
-/** URL param ↔ disk relative path (ingles/act ↔ ingles::act) */
+/** URL param ↔ disk relative path (ingles/u1 ↔ ingles::u1) */
 const toUrlFolder = (relativePath) => {
   if (!relativePath) {
     return '';
@@ -75,20 +75,33 @@ const fromUrlFolder = (urlFolder) => {
   return assertSafeRelative(relative);
 };
 
-/** parent space (one segment or '') + activity name → relative path */
+/** Dashboard path with slashes ↔ relative disk path */
+const fromDashboardPath = (dashboardPath) => {
+  const raw = String(dashboardPath ?? '').replaceAll('\\', '/').replaceAll(/^\/+|\/+$/g, '');
+  if (!raw) {
+    return '';
+  }
+  return assertSafeRelative(raw);
+};
+
+const toDashboardHref = (relativePath) => {
+  if (!relativePath) {
+    return '/dashboard';
+  }
+  return `/dashboard/${assertSafeRelative(relativePath)}`;
+};
+
+/** parent ('' or multi-segment) + name → relative path */
 const joinParent = (parent, name) => {
   const segment = sanitizeSegment(name);
   if (!segment) {
     throw new Error('folder name is empty');
   }
-  const parentClean = parent ? sanitizeSegment(parent) : '';
-  if (parent && parentClean !== parent) {
-    throw new Error('invalid space name');
+  if (!parent) {
+    return segment;
   }
-  if (parentClean) {
-    return `${parentClean}/${segment}`;
-  }
-  return segment;
+  const parentClean = assertSafeRelative(parent);
+  return `${parentClean}/${segment}`;
 };
 
 const parentOf = (relativePath) => {
@@ -104,12 +117,27 @@ const basenameOf = (relativePath) => {
   return parts[parts.length - 1];
 };
 
+const breadcrumbParts = (relativePath) => {
+  if (!relativePath) {
+    return [];
+  }
+  const parts = assertSafeRelative(relativePath).split('/');
+  const crumbs = [];
+  let acc = '';
+  for (const part of parts) {
+    acc = acc ? `${acc}/${part}` : part;
+    crumbs.push({ name: part, path: acc, href: toDashboardHref(acc) });
+  }
+  return crumbs;
+};
+
 /** List direct child activity folders under parent ('' = root). */
 const listActivities = (parent = '') => {
   const base = contentDir(parent);
   if (!fs.existsSync(base)) {
     return [];
   }
+  const parentClean = parent ? assertSafeRelative(parent) : '';
   const items = [];
   for (const name of fs.readdirSync(base)) {
     const full = path.join(base, name);
@@ -119,19 +147,21 @@ const listActivities = (parent = '') => {
     if (!isActivityDir(full)) {
       continue;
     }
-    const relative = parent ? `${sanitizeSegment(parent)}/${name}` : name;
-    items.push(relative);
+    items.push(parentClean ? `${parentClean}/${name}` : name);
   }
   return items;
 };
 
-/** List spaces at content root (phase 1: only root). */
-const listSpaces = () => {
-  const base = CONTENT_ROOT;
+/** List child spaces/sections under parent ('' = root). */
+const listSpaces = (parent = '') => {
+  const base = contentDir(parent);
   if (!fs.existsSync(base)) {
-    fs.mkdirSync(base, { recursive: true });
+    if (!parent) {
+      fs.mkdirSync(base, { recursive: true });
+    }
     return [];
   }
+  const parentClean = parent ? assertSafeRelative(parent) : '';
   const spaces = [];
   for (const name of fs.readdirSync(base)) {
     const full = path.join(base, name);
@@ -141,21 +171,30 @@ const listSpaces = () => {
     if (!isSpaceDir(full)) {
       continue;
     }
+    const folder = parentClean ? `${parentClean}/${name}` : name;
     spaces.push({
       name,
-      folder: name
+      folder,
+      folderUrl: toUrlFolder(folder),
+      href: toDashboardHref(folder)
     });
   }
   spaces.sort((a, b) => a.name.localeCompare(b.name, undefined, { numeric: true, sensitivity: 'base' }));
   return spaces;
 };
 
-const spaceHasActivities = (spaceName) => {
-  const relative = sanitizeSegment(spaceName);
-  if (!relative) {
-    return false;
+/** True if the folder has direct child activities or nested spaces with content. */
+const spaceHasChildren = (relativePath) => {
+  const relative = assertSafeRelative(relativePath);
+  if (listActivities(relative).length > 0) {
+    return true;
   }
-  return listActivities(relative).length > 0;
+  return listSpaces(relative).length > 0;
+};
+
+/** @deprecated use spaceHasChildren */
+const spaceHasActivities = (spaceName) => {
+  return listActivities(assertSafeRelative(spaceName)).length > 0;
 };
 
 module.exports = {
@@ -168,10 +207,14 @@ module.exports = {
   isSpaceDir,
   toUrlFolder,
   fromUrlFolder,
+  fromDashboardPath,
+  toDashboardHref,
   joinParent,
   parentOf,
   basenameOf,
+  breadcrumbParts,
   listActivities,
   listSpaces,
+  spaceHasChildren,
   spaceHasActivities
 };
