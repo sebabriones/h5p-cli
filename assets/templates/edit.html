@@ -15,6 +15,15 @@
     baseUrl: "{baseUrl}",
     url: "{baseUrl}",
     siteUrl: "{baseUrl}",
+    // H5P.getPath uses contents[cid].contentUrl when present. Without it, the
+    // editor builds /content/{nodeVersionId}/… and nested folders use "::",
+    // which 404s (e.g. /content/prueba::iw-1/images/…). filesPath already
+    // points at the real package content directory.
+    contents: {
+      "cid-{folder}": {
+        contentUrl: "{filesPath}"
+      }
+    },
     core: {
       scripts: [
         "/{libraries}/h5p-php-library/js/jquery.js",
