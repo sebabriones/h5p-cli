@@ -3,6 +3,10 @@ package-lock.json
 /libraries/*
 /_disabled-libraries/*
 !/libraries/H5P.GreetingCard-1.0
+!/libraries/h5p-php-library/
+!/libraries/h5p-php-library/**
+!/libraries/h5p-editor-php-library/
+!/libraries/h5p-editor-php-library/**
 /temp/*
 /uploads/*
 /content/*
