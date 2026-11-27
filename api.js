@@ -502,6 +502,7 @@ module.exports = {
       const output = {
         list: [],
         spaces: contentPaths.listSpaces(parent),
+        tree: contentPaths.listSpacesTree(),
         parent,
         breadcrumbs: contentPaths.breadcrumbParts(parent),
         total: 0

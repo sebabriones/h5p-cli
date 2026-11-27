@@ -1,4 +1,7 @@
 function dashboard(options) {
+  const PAGE_SIZE_KEY = 'h5p-cli.dashboard.pageSize';
+  const EXPANDED_KEY = 'h5p-cli.dashboard.expanded';
+  const PAGE_SIZES = [10, 25, 50, 100];
   let newContentButton;
   let newContent;
   let importContentButton;
@@ -18,11 +21,14 @@ function dashboard(options) {
   let spacesSection;
   let content;
   let pagination;
+  let pageSize;
   let languages;
   let entry;
   let spaceEntry;
   let link;
   let currentPage = 0;
+  let lastTree = [];
+  let expandedSpaces = new Set();
   let modal;
   let modalTitle;
   let modalHint;
@@ -31,9 +37,55 @@ function dashboard(options) {
   let modalOk;
   let modalResolver = null;
   let modalKeyHandler = null;
+  this.readStoredPageSize = () => {
+    try {
+      const stored = parseInt(localStorage.getItem(PAGE_SIZE_KEY), 10);
+      if (PAGE_SIZES.includes(stored)) {
+        return stored;
+      }
+    }
+    catch (_error) {
+      // localStorage puede no estar disponible
+    }
+    return options.limit && PAGE_SIZES.includes(options.limit) ? options.limit : 10;
+  }
+  this.readStoredExpanded = () => {
+    try {
+      const raw = localStorage.getItem(EXPANDED_KEY);
+      if (!raw) {
+        return [];
+      }
+      const parsed = JSON.parse(raw);
+      return Array.isArray(parsed) ? parsed.filter((item) => typeof item === 'string') : [];
+    }
+    catch (_error) {
+      return [];
+    }
+  }
+  this.saveExpanded = () => {
+    try {
+      localStorage.setItem(EXPANDED_KEY, JSON.stringify([...expandedSpaces]));
+    }
+    catch (_error) {
+      // ignore
+    }
+  }
+  this.ensureAncestorsExpanded = (spacePath) => {
+    if (!spacePath) {
+      return;
+    }
+    const parts = String(spacePath).split('/').filter(Boolean);
+    let acc = '';
+    for (const part of parts) {
+      acc = acc ? `${acc}/${part}` : part;
+      expandedSpaces.add(acc);
+    }
+  }
   this.init = () => {
-    options.limit = options.limit || 10;
     options.space = options.space || '';
+    options.limit = this.readStoredPageSize();
+    expandedSpaces = new Set(this.readStoredExpanded());
+    this.ensureAncestorsExpanded(options.space);
     window.addEventListener('load', () => {
       console.log('> page loaded');
       newContentButton = document.getElementById(options.ids.newContentButton);
@@ -55,6 +107,7 @@ function dashboard(options) {
       spacesSection = document.getElementById(options.ids.spacesSection);
       content = document.getElementById(options.ids.content);
       pagination = document.getElementById(options.ids.pagination);
+      pageSize = document.getElementById(options.ids.pageSize);
       languages = document.getElementById(options.ids.languages);
       modal = document.getElementById(options.ids.modal);
       modalTitle = document.getElementById(options.ids.modalTitle);
@@ -70,7 +123,10 @@ function dashboard(options) {
         newSpaceButtonLabel.innerText = options.sectionButtonLabel || (options.space ? 'Sub-sección' : 'Sección');
       }
       if (sectionsTitle) {
-        sectionsTitle.innerText = options.sectionsTitle || (options.space ? 'Sub-secciones' : 'Secciones');
+        sectionsTitle.innerText = 'Secciones';
+      }
+      if (pageSize) {
+        pageSize.value = String(options.limit);
       }
       this.bindModalChrome();
       this.getPage();
@@ -80,6 +136,75 @@ function dashboard(options) {
         this.showStatus();
       }
     });
+  }
+  this.changePageSize = () => {
+    if (!pageSize) {
+      return;
+    }
+    const value = parseInt(pageSize.value, 10);
+    if (!PAGE_SIZES.includes(value)) {
+      return;
+    }
+    options.limit = value;
+    try {
+      localStorage.setItem(PAGE_SIZE_KEY, String(value));
+    }
+    catch (_error) {
+      // ignore
+    }
+    this.getPage(0, value);
+  }
+  this.toggleTreeNode = (event, folder) => {
+    if (event) {
+      event.preventDefault();
+      event.stopPropagation();
+    }
+    if (!folder) {
+      return;
+    }
+    if (expandedSpaces.has(folder)) {
+      expandedSpaces.delete(folder);
+    }
+    else {
+      expandedSpaces.add(folder);
+    }
+    this.saveExpanded();
+    this.renderSpacesTree(lastTree);
+  }
+  this.renderTreeNodes = (nodes) => {
+    let html = '';
+    for (const node of (nodes || [])) {
+      const hasChildren = Array.isArray(node.children) && node.children.length > 0;
+      const isExpanded = hasChildren && expandedSpaces.has(node.folder);
+      const isActive = options.space === node.folder;
+      const childrenHtml = hasChildren ? this.renderTreeNodes(node.children) : '';
+      html += this.fromTemplate(spaceEntry, {
+        name: this.escapeHtml(node.name),
+        folder: this.escapeHtml(node.folder),
+        folderUrl: node.folderUrl || '',
+        href: node.href || '#',
+        activeClass: isActive ? ' is-active' : '',
+        toggleClass: hasChildren ? (isExpanded ? ' is-expanded' : '') : ' is-leaf',
+        toggleIcon: hasChildren ? (isExpanded ? '▾' : '▸') : '',
+        childrenClass: hasChildren && isExpanded ? '' : ' hidden',
+        children: childrenHtml
+      });
+    }
+    return html;
+  }
+  this.renderSpacesTree = (tree) => {
+    if (!spaces) {
+      return;
+    }
+    lastTree = Array.isArray(tree) ? tree : [];
+    this.ensureAncestorsExpanded(options.space);
+    const rootActive = !options.space ? ' is-active' : '';
+    let html = `<a class="space-root-link${rootActive}" href="/dashboard">Dashboard (raíz)</a>`;
+    html += this.renderTreeNodes(lastTree);
+    if (!lastTree.length) {
+      html += '<p class="empty-hint">No hay secciones. Crea una para organizar actividades.</p>';
+    }
+    spaces.innerHTML = html;
   }
   this.bindModalChrome = () => {
     if (!modal) {
@@ -216,6 +341,7 @@ function dashboard(options) {
   this.getPage = async (page = 0, limit = options.limit) => {
     try {
       currentPage = page;
+      options.limit = limit;
       const query = [`page=${page}`, `limit=${limit}`];
       if (options.space) {
         query.push(`parent=${encodeURIComponent(options.space)}`);
@@ -225,21 +351,9 @@ function dashboard(options) {
         throw new Error(result.error);
       }
       this.renderBreadcrumb(result.breadcrumbs || []);
+      this.renderSpacesTree(result.tree || []);
       let contentHTML = '';
-      let spacesHTML = '';
       let paginationHTML = '';
-      for (let item of (result.spaces || [])) {
-        spacesHTML += this.fromTemplate(spaceEntry, {
-          name: item.name,
-          folder: item.folder,
-          folderUrl: item.folderUrl || item.folder,
-          href: item.href || `/dashboard/${item.folder}`
-        });
-      }
-      const emptySpaces = options.space
-        ? 'No hay sub-secciones en este nivel.'
-        : 'No hay secciones. Crea una para organizar actividades.';
-      spaces.innerHTML = spacesHTML || `<p class="empty-hint">${emptySpaces}</p>`;
       for (let item of result.list) {
         contentHTML += this.fromTemplate(entry, {
           title: item.title,

@@ -211,6 +211,17 @@ const listAllSpacePaths = (parent = '', acc = []) => {
   return acc;
 };
 
+/**
+ * Nested section tree for dashboard navigation.
+ * @returns {Array<{name: string, folder: string, folderUrl: string, href: string, children: Array}>}
+ */
+const listSpacesTree = (parent = '') => {
+  return listSpaces(parent).map((item) => ({
+    ...item,
+    children: listSpacesTree(item.folder)
+  }));
+};
+
 /** True if candidate is the same as or nested under ancestor. */
 const isUnderPath = (candidate, ancestor) => {
   if (!ancestor) {
@@ -243,6 +254,7 @@ module.exports = {
   listActivities,
   listSpaces,
   listAllSpacePaths,
+  listSpacesTree,
   isUnderPath,
   spaceHasChildren,
   spaceHasActivities

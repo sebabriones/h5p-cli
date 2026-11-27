@@ -121,6 +121,19 @@ describe('contentPaths — árbol en disco', () => {
     assert.deepEqual(cp.listAllSpacePaths(), ['a', 'a/b', 'c']);
   });
 
+  it('listSpacesTree anida hijos', () => {
+    mkdir('a');
+    mkdir('a', 'b');
+    mkdir('c');
+    const tree = cp.listSpacesTree();
+    assert.equal(tree.length, 2);
+    assert.equal(tree[0].folder, 'a');
+    assert.deepEqual(tree[0].children.map((n) => n.folder), ['a/b']);
+    assert.equal(tree[0].children[0].href, '/dashboard/a/b');
+    assert.equal(tree[1].folder, 'c');
+    assert.deepEqual(tree[1].children, []);
+  });
+
   it('spaceHasChildren refleja hijas y actividades', () => {
     mkdir('vacia');
     mkdir('con-sub');
